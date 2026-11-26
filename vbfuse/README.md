@@ -48,6 +48,11 @@ Nothing is installed or permanently changed; VB6 compiles normally and the
   exe opens an in-memory DB and runs `SELECT 40+2` → 42, **DLL deleted**. The
   static CRT is initialized at load via an injected **TLS callback** (no source
   edit, no C compiler) — see `VB6_FUSION_NOTES.md` §5.
+- ✓ **SQLite, full OO classes**: a Standard-EXE app built from the real
+  `sqlite4vb` class stack (`cSQLite` / `cSQLiteAPI` / `cSQLiteResults` / … — 45
+  Declares) fuses into a 1.1 MB standalone exe that opens `:memory:`, creates a
+  table, inserts rows and queries them back (`count=2 row2=fused`) with the DLL
+  deleted and **no source change** to the classes.
 
 See **`VB6_FUSION_NOTES.md`** for the full VB6 build model, the Declare-thunk
 format, the debugger capture, the `/OPT:NOREF` rule, and the TLS-callback CRT-init.
