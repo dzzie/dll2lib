@@ -75,4 +75,10 @@ Staged, each gated by a link-and-run test (`tests/run_s0.py` … `run_s6.py`):
 - **S4** imports — `.idata$*` rebuild (fused exe pulls `kernel32!lstrlenA`)
 - **S5** relocs — data→code / data→data / code→data all converted
 - **S6** bootstrap — `DllMain`/CRT init runs via `_<dll>_StaticInit`
-- **S7** _(in progress)_ — real CRT-built DLLs, multi-code-section merge, TLS/resources
+- **S7** real-world hardening:
+  - a real `/MT /GS` C++ DLL (CRT + global ctor + `DllMain`, ~1800 relocs) fuses and runs
+  - **section-merge** — multiple code sections joined by reloc-less `rel32` merged into one `.text`
+  - **TLS** — a DLL with a TLS directory is cleanly refused
+  - **resources** — `.rsrc` is skipped (code still works; resource lookups are a v2 item)
+
+All 11 stage tests green (`tests/run_s0.py` … `run_s7_rsrc.py`).

@@ -141,34 +141,58 @@ def convert(pe: PE32, stdcall_args: dict[str, int] | None = None,
         raise ConvertError("DLL is not convertible: " + "; ".join(pe.refuse_reasons))
 
     cb = CoffBuilder()
-    carried = []   # list of (pe_section, coff_section)
-    for ps in pe.sections:
-        if ps.name in SKIP_SECTIONS:
+
+    def mapped(ps) -> bytes:
+        # the MAPPED image bytes (virtual_size): zero-extend a bss tail
+        # (virtual_size > raw), drop file-alignment padding (raw > virtual_size).
+        data = bytes(ps.raw)
+        vs = ps.virtual_size
+        if vs:
+            data = data[:vs] if vs <= len(data) else data + b"\x00" * (vs - len(data))
+        return data
+
+    # regions: (start_rva, end_rva, coff_section, base_rva); offset = rva - base
+    regions: list[tuple[int, int, object, int]] = []
+    kept = [ps for ps in pe.sections if ps.name not in SKIP_SECTIONS]
+    code_secs = [ps for ps in kept if ps.is_code]
+
+    # Section-merge rule: >1 code section must become ONE contiguous .text so
+    # inter-section rel32 branches (which carry no base reloc) keep their
+    # displacements. Layout mirrors the original (slot = va - cbase), gaps
+    # zero-filled; this is why dead-code elimination is impossible.
+    merged_code = len(code_secs) >= 2
+    if merged_code:
+        cbase = min(ps.virtual_address for ps in code_secs)
+        cend = max(ps.virtual_address + max(ps.virtual_size, ps.size_of_raw_data)
+                   for ps in code_secs)
+        merged = cb.add_section(".text", FLAGS_TEXT)
+        buf = bytearray(cend - cbase)
+        for ps in code_secs:
+            d = mapped(ps)
+            o = ps.virtual_address - cbase
+            buf[o:o + len(d)] = d
+        merged.append(bytes(buf))
+        regions.append((cbase, cend, merged, cbase))
+
+    for ps in kept:
+        if merged_code and ps.is_code:
             continue
         flags = _coff_flags(ps)
         if ps.is_bss:
             cs = cb.add_section(_secname(ps.name), flags, bss=max(ps.virtual_size, 1))
         else:
             cs = cb.add_section(_secname(ps.name), flags)
-            # carry the MAPPED image bytes (virtual_size), zero-extending a bss
-            # tail (virtual_size > raw) and dropping file-alignment padding
-            # (raw > virtual_size), so every reloc target offset is in range.
-            data = bytes(ps.raw)
-            vs = ps.virtual_size
-            if vs:
-                data = data[:vs] if vs <= len(data) else data + b"\x00" * (vs - len(data))
-            cs.append(data)
-        carried.append((ps, cs))
+            cs.append(mapped(ps))
+        end = ps.virtual_address + max(ps.virtual_size, ps.size_of_raw_data)
+        regions.append((ps.virtual_address, end, cs, ps.virtual_address))
 
-    lowest_va = min((ps.virtual_address for ps, _ in carried), default=0)
+    lowest_va = min((st for st, _, _, _ in regions), default=0)
 
     def find(rva: int):
-        for ps, cs in carried:
-            start = ps.virtual_address
-            end = start + max(ps.virtual_size, ps.size_of_raw_data)
-            if start <= rva < end:
-                return ps, cs
-        return None, None
+        for st, en, cs, base in regions:
+            if st <= rva < en:
+                return cs, rva - base
+        return None, 0
 
     # --- rebuild the DLL's own imports as .idata$* (S4) ---
     iat_rva, iat_sz = _iat_range(pe)
@@ -176,10 +200,9 @@ def convert(pe: PE32, stdcall_args: dict[str, int] | None = None,
 
     # --- HIGHLOW base relocs -> COFF DIR32 ---
     for r in pe.relocs:                      # parser already dropped ABSOLUTE padding
-        ps, cs = find(r.rva)
+        cs, off = find(r.rva)
         if cs is None:
             continue                         # reloc inside a skipped section
-        off = r.rva - ps.virtual_address
         if off + 4 > len(cs.data):
             continue                         # in a bss tail we didn't carry
         stored = struct.unpack_from("<I", cs.data, off)[0]
@@ -189,10 +212,10 @@ def convert(pe: PE32, stdcall_args: dict[str, int] | None = None,
             tsym = idata5.sym_index
             addend = target_rva - iat_rva
         else:
-            tps, tcs = find(target_rva)
+            tcs, toff = find(target_rva)
             if tcs is not None:
                 tsym = tcs.sym_index
-                addend = target_rva - tps.virtual_address
+                addend = toff
             elif target_rva < lowest_va:
                 # pointer into the PE headers / image base (e.g. the CRT storing
                 # the module handle); rebase onto the fused exe's own image base.
@@ -211,11 +234,10 @@ def convert(pe: PE32, stdcall_args: dict[str, int] | None = None,
     exports = [e for e in pe.exports if e.forwarder is None and e.rva != 0]
     impsec = cb.add_section(".imp", FLAGS_RDATA) if exports else None
     for e in exports:
-        ps, cs = find(e.rva)
+        cs, off = find(e.rva)
         if cs is None:
             continue
         name = e.name if e.name is not None else f"ordinal{e.ordinal}"
-        off = e.rva - ps.virtual_address
         typ = SYM_TYPE_FUNCTION if (cs.flags & SCN_CNT_CODE) else SYM_TYPE_NULL
         fn = "_" + name
         fnsym = cb.define(fn, off, cs.number, typ)
@@ -244,10 +266,9 @@ def _emit_bootstrap(cb: CoffBuilder, pe: PE32, find, init_symbol: str) -> None:
         binit.append(b"\xC3")                        # no entry -> StaticInit is a no-op
         cb.define(init_symbol, 0, binit.number, SYM_TYPE_FUNCTION)
         return
-    eps, epc = find(ep)
+    epc, ep_off = find(ep)
     if epc is None:
         raise ConvertError("entry point RVA not in a carried section")
-    ep_off = ep - eps.virtual_address
     code = bytearray()
     code += bytes([0x6A, 0x00, 0x6A, 0x01, 0x68])    # push 0; push 1; push imm32
     code += b"\x00\x00\x00\x00"                        # off 5: hinstDLL = &__ImageBase
