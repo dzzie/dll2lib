@@ -24,7 +24,7 @@ dll2lib:
 7. invokes MS `lib.exe` to wrap the object into a `.lib`.
 
 Inspired by / lifted from **VBStatic** (VB6-LinkAlchemy), which does exactly
-this but hardwired for `msvbvm60.dll`.
+this for `msvbvm60.dll`.
 
 ## Usage
 

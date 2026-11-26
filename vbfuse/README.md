@@ -72,8 +72,27 @@ Nothing is installed or permanently changed; VB6 compiles normally and the
 ```
 vbfuse <project.vbp> --fuse foo.dll [--fuse bar.dll ...]
        [--fuse-runtime C:\Windows\SysWOW64\msvbvm60.dll [--vbstatic VBStatic.exe]]
-       [--out fused.exe] [--run [-- <args>]]
+       [--console] [--out fused.exe] [--run [-- <args>]]
 ```
+
+### Testing with `--console`
+
+`--console` builds the fused exe with the **CONSOLE** subsystem, so a VB app can
+write straight to stdout (easy to capture in a test harness). Add a tiny print
+helper to your `Sub Main` project — e.g. wqweto's one-liner:
+
+```vb
+Public Sub ConsolePrint(sText As String)
+    Static oStdOut As Object
+    If oStdOut Is Nothing Then _
+        Set oStdOut = CreateObject("Scripting.FileSystemObject").GetStandardStream(1)
+    oStdOut.Write sText
+End Sub
+```
+
+Then `vbfuse app.vbp --fuse foo.dll --console --run` prints the app's output to
+the console. (For full console I/O — argv, stdin, pipes, exit codes — see Karl E.
+Peterson's classic `MConsole.bas`.)
 
 See **`VB6_FUSION_NOTES.md`** for the full VB6 build model, the Declare-thunk
 format, the debugger capture, the `/OPT:NOREF` rule, and the TLS-callback CRT-init.

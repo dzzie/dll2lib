@@ -79,6 +79,9 @@ def main(argv):
     ap.add_argument("--out", help="output exe (default <exe>_fused.exe next to the vbp)")
     ap.add_argument("--work", help="work dir (default <projdir>\\vbfuse_work)")
     ap.add_argument("--run", action="store_true", help="run the fused exe when done")
+    ap.add_argument("--console", action="store_true",
+                    help="build the fused exe with the CONSOLE subsystem (so a VB "
+                         "ConsolePrint-style Sub can write to stdout -- handy for testing)")
     a = ap.parse_args(argv)
 
     vbp = os.path.abspath(a.vbp)
@@ -179,11 +182,12 @@ def main(argv):
 
     # 4) relink
     print("[4/4] relinking fused exe")
+    subsys = "/SUBSYSTEM:CONSOLE" if a.console else "/SUBSYSTEM:WINDOWS,4.0"
     if runtime_fused:
         # VBStatic put the runtime (and the symbols the other OBJs need) into the
         # main OBJ -> use its entry/flags, link all captured OBJs, no VBAEXE6.LIB.
         ordered = sorted(cap.objs, key=lambda o: 0 if o == main_obj else 1)
-        args = [LINK_EXE, "/NOLOGO", "/SUBSYSTEM:WINDOWS,4.0", "/NODEFAULTLIB",
+        args = [LINK_EXE, "/NOLOGO", subsys, "/NODEFAULTLIB",
                 "/ENTRY:_VBStaticEntry", "/BASE:0x400000", "/INCREMENTAL:NO",
                 "/OPT:NOREF", "/IGNORE:4078", "/OUT:" + fused] + ordered
     else:
@@ -196,6 +200,8 @@ def main(argv):
                 args.append(obj_map.get(os.path.basename(t).lower(), t))
             elif tu.startswith("/OUT:"):
                 args.append("/OUT:" + fused)
+            elif tu.startswith("/SUBSYSTEM:"):
+                args.append(subsys if a.console else t)
             elif tu == "/OPT:REF" or tu == "/OPT:NOREF":
                 args.append("/OPT:NOREF"); saw_noref = True
             else:
