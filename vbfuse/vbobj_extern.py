@@ -216,6 +216,21 @@ class CoffObj:
             fh.write(self.F); fh.write(self.SymBuf); fh.write(self.StrBuf)
 
 
+def externalize(obj_path, markers, prefix="_", out_path=None):
+    """Patch (in place, or to out_path) every Declare thunk whose Lib name is in
+    `markers` into a linker extern. Returns the list of extern symbol names."""
+    low = [m.lower() for m in markers]
+    obj = CoffObj(obj_path)
+    todo = [d for d in obj.find_declares() if d.lib.lower() in low]
+    for d in todo:
+        if not d.func or d.func.startswith("#"):
+            raise VbObjError(f"cannot extern ordinal/empty func: {d.func!r}")
+    names = [obj.patch_one(d, prefix) for d in todo]
+    if todo:
+        obj.save(out_path or obj_path)
+    return names
+
+
 # ---- little-endian byte helpers ----
 def u16(b, p): return b[p] | (b[p + 1] << 8)
 def i16(b, p):
