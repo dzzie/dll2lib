@@ -261,3 +261,45 @@ This project's own code (dll2lib + vbfuse) is **MIT** — see [`LICENSE`](LICENS
 Bundled third‑party components keep their own licenses (VB6‑LinkAlchemy/VBStatic
 MIT, sqlite4vb MIT, SQLite public‑domain, UCL GPL — so the example `ucl_dll.dll`
 is GPL); the `LICENSE` file and example READMEs spell this out.
+
+## Related work & prior art
+
+dll2lib + vbfuse build on two well‑trodden ideas — turning a linked binary back
+into relinkable objects, and rewriting an object file's symbols — specialized to
+DLLs and wired into VB6.
+
+**DLL → static library without source** (direct ancestors — a full
+implementation, *not* an import stub):
+
+- Binary Soft, *DLL to Lib* — the commercial tool this emulates:
+  [softpedia](https://www.softpedia.com/get/Programming/Other-Programming-Files/DLL-to-Lib.shtml)
+- CoderUpgrade, *Dll to Static Lib* — a later equivalent:
+  [listing](https://dll-to-static-lib.software.informer.com/)
+- (For contrast, the *common* `lib.exe /DEF` / MinGW `dlltool` route only makes an
+  **import stub** that still needs the DLL at runtime — not this.)
+
+**Delinking** — recovering relocatable objects from a linked binary. This is the
+harder, general case: those binaries have no `.reloc`, so relocations must be
+recovered by analysis. dll2lib sidesteps it entirely by reusing the DLL's own
+relocation table (no disassembly):
+
+- [jnider/delinker](https://github.com/jnider/delinker) — unlink an exe into `.o` files
+- [vostok-delinker](https://github.com/srp-survarium/vostok-delinker) — old‑MSVC PE + PDB → per‑TU COFF
+- [boricj's Ghidra delinker](https://news.ycombinator.com/item?id=35738758) — exports relocatable ELF; delinked a 7 MiB game
+- [binja_delink](https://github.com/alecnunn/binja_delink) — Binary Ninja plugin
+- LLVM **BOLT** keeps relocations via `--emit-relocs` (the "don't recover them later" approach)
+
+**Object‑file / symbol rewriting** — the generic form of vbfuse's `Declare`→extern move:
+
+- Agner Fog, [*objconv*](https://www.agner.org/optimize/#objconv) — convert COFF/OMF/ELF/Mach‑O, rename/modify symbols
+
+**VB6 build interception** — prior approaches to the hook vbfuse does with a debugger:
+
+- [VB6‑LinkAlchemy / VBStatic](https://github.com/ultraalex00/VB6-LinkAlchemy) by UltraAlex0 — embed `msvbvm60`; the inspiration ([write‑up](https://www.vbforums.com/showthread.php?912383-VB6-LinkAlchemy-Embedding-MSVBVM60-DLL-into-EXE-DLL))
+- [Jim White's LinkTool](https://github.com/dzzie/addins/tree/master/LinkTool) — replaces `LINK.EXE`
+- [John Chamberlain's Compiler Control](https://github.com/dzzie/addins/tree/master/CompilerControl99) — add‑in + `CreateProcess` API hook
+
+dll2lib's own contribution is the **combination**: `.reloc`‑based DLL→lib
+conversion (no disassembly) driven into a VB6 build via debugger‑intercepted
+capture + on‑the‑fly `Declare`‑thunk rewriting — with no source edits, no
+`LINK.EXE` swap, and no add‑in.
