@@ -1,0 +1,26 @@
+# VB6 source MUST stay CRLF (VB6 rejects LF with "'X' could not be loaded").
+# Base set courtesy of the project author's VB-friendly .gitattributes.
+*.frm eol=crlf
+*.bas eol=crlf
+*.cls eol=crlf
+*.ctl eol=crlf
+*.vbp eol=crlf
+*.vbg eol=crlf
+*.dsr eol=crlf
+*.txt eol=crlf
+*.js  eol=crlf
+*.iss eol=crlf
+*.def eol=crlf
+*.cmd eol=crlf
+*.bat eol=crlf
+
+# Binaries: never apply EOL conversion; treat as binary.
+*.dll binary
+*.exe binary
+*.lib binary
+*.obj binary
+*.res binary
+*.frx binary
+*.ico binary
+*.bmp binary
+*.db  binary

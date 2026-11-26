@@ -2,10 +2,21 @@
 __pycache__/
 *.pyc
 
-# stray local build artifacts (tests build in temp dirs, but just in case)
+# build intermediates / work dirs
 *.obj
-*.lib
 *.exp
+vbfuse_work/
+full_work/
+*.pdb
+result.txt
+vb6_make.log
+
+# EXE/DLL/LIB are ignored by default (build artifacts) ...
 *.exe
 *.dll
-!tests/**/*.dll
+*.lib
+# ... except the committed example inputs + the prebuilt fused exes, which we
+#     ship so the demos build without fuss and the results can be analyzed.
+!vbfuse/examples/**/*.dll
+!vbfuse/examples/**/*.exe
+!vbfuse/examples/**/VBStatic.exe

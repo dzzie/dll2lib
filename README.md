@@ -85,3 +85,39 @@ Staged, each gated by a link-and-run test (`tests/run_s0.py` … `run_s6.py`):
   - **resources** — `.rsrc` is skipped (code still works; resource lookups are a v2 item)
 
 All 11 stage tests green (`tests/run_s0.py` … `run_s7_rsrc.py`).
+
+## vbfuse — fuse C DLLs (and the VB6 runtime) into a compiled VB6 exe
+
+[`vbfuse/`](vbfuse/) is a front end that uses dll2lib to make a **standalone VB6
+executable**: it takes a normally‑compiled VB6 project that calls C DLLs via
+`Declare Lib "foo.dll"` and fuses those DLLs in — **no source edits, no linker
+swap, no add‑in**. With `--fuse-runtime` it also fuses `msvbvm60.dll`, producing
+an exe that imports only base Windows DLLs.
+
+```
+vbfuse app.vbp --fuse foo.dll [--fuse-runtime C:\Windows\SysWOW64\msvbvm60.dll]
+```
+
+It drives the VB6 compile under a debugger to capture the OBJs, rewrites the
+`Declare` thunks into linker externs, converts the DLLs with dll2lib, injects a
+TLS callback to run any static‑CRT init, and relinks. See
+[`vbfuse/README.md`](vbfuse/README.md), [`vbfuse/VB6_FUSION_NOTES.md`](vbfuse/VB6_FUSION_NOTES.md),
+and runnable demos in [`vbfuse/examples/`](vbfuse/examples/) (including a VB6
+SQLite app fused into a single exe that needs neither `sqlite3_vb6.dll` nor
+`msvbvm60.dll`).
+
+## Credits & acknowledgements
+
+The whole VB6 side of this project stands on **VB6‑LinkAlchemy** by
+**UltraAlex0** — the project that pioneered embedding `MSVBVM60.DLL` into a VB6
+EXE/DLL. Its **VBStatic** tool is what `vbfuse --fuse-runtime` uses to fuse the
+VB6 runtime, and `vbfuse/vbobj_extern.py` is a direct Python port of its
+**VBExtern** (the `Declare`‑thunk → linker‑extern rewrite). Enormous thanks —
+this would not exist without that work.
+
+- VB6‑LinkAlchemy: https://github.com/ultraalex00/VB6-LinkAlchemy
+- Write‑up: https://www.vbforums.com/showthread.php?912383-VB6-LinkAlchemy-Embedding-MSVBVM60-DLL-into-EXE-DLL
+
+Other third‑party components used in the demos are credited in their example
+folders: **sqlite4vb** (VB6 SQLite classes, © David Zimmer / sandsprite.com),
+**SQLite** (public domain), and **UCL** (© Markus F.X.J. Oberhumer).

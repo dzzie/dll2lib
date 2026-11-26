@@ -1,5 +1,12 @@
 # vbfuse — fuse a C DLL into a compiled VB6 program
 
+> **Built on [VB6‑LinkAlchemy](https://github.com/ultraalex00/VB6-LinkAlchemy) by
+> UltraAlex0.** That project pioneered embedding `MSVBVM60.DLL` into a VB6
+> EXE/DLL and is the direct inspiration and foundation for this whole leg.
+> `vbfuse --fuse-runtime` drives its **VBStatic** to fuse the VB6 runtime, and
+> `vbobj_extern.py` is a Python port of its **VBExtern**. Huge thanks.
+> Write‑up: https://www.vbforums.com/showthread.php?912383-VB6-LinkAlchemy-Embedding-MSVBVM60-DLL-into-EXE-DLL
+
 Goal: take a VB6 project that calls a C DLL via `Declare Function ... Lib
 "foo.dll"` and produce a standalone `.exe` with that DLL's code **fused in** —
 no `foo.dll` at runtime — **without editing the VB source, swapping VB6's
