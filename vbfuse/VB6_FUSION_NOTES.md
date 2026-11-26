@@ -137,19 +137,39 @@ OBJ in and adding the `dll2lib` `.lib`, **but**:
   reference-tracking quirk with the rewritten thunks. With `/OPT:REF` the fused
   code is silently dropped and the `jmp _Func` lands on nothing → crash. Forcing
   `/OPT:NOREF` retains it.
-- **Omit the dll2lib bootstrap (`_<dll>_StaticInit`) for DLLs that don't need
-  CRT init.** The bootstrap references `___ImageBase`, which the VC6-era
-  `LINK.EXE` does **not** provide → unresolved external. For a DLL with no C++
-  global constructors (e.g. UCL — `level`/`ErrorString` are statically
-  initialized, `strcpy`/`sprintf` come from the external `MSVCRT.dll`), skip it:
-  call `convert(pe)` with `init_symbol=None`.
+- **Do NOT use the dll2lib `_<dll>_StaticInit` bootstrap here.** It references
+  `___ImageBase`, which the VC6-era `LINK.EXE` does **not** provide → unresolved
+  external. Instead we run CRT init via a **TLS callback** (below).
 
-> **Open problem:** a C DLL that genuinely needs CRT init (C++ global ctors, a
-> `/GS` cookie, etc.) *does* need its `DllMainCRTStartup` run once. There's no C
-> entry point in a VB6 exe to call `StaticInit`, and VC6's linker lacks
-> `__ImageBase`. Options to explore: emit an auto-initializer the VB runtime
-> triggers, inject a synthetic `Declare`-style call, or define `___ImageBase`
-> ourselves. Not needed for UCL; revisit for heavier DLLs (e.g. sqlite3).
+### Running the fused DLL's CRT init (the `__tls_used` TLS callback)
+
+A static-CRT DLL (e.g. `sqlite3_vb6.dll` — no `msvcrt` import, so the CRT is
+linked in) **must** have its `DllMainCRTStartup` run once before use, or the CRT
+heap is never created and the first `malloc` crashes. A VB6 exe has no C entry
+point to call it from, and we won't touch the VB source — so instead `vbfuse`
+injects a **TLS callback** that the Windows loader runs at process-attach,
+*before* the exe's entry point:
+
+- `dll2lib convert(pe, entry_symbol="_<dll>_fzentry")` exposes the DLL's original
+  entry (`DllMainCRTStartup`) as a symbol.
+- `tlsinit.emit_tls_init([...])` hand-builds (via `coff.py`, **no C compiler**) a
+  COFF object with:
+  - a callback `void __stdcall cb(hInst, reason, reserved)` that, on
+    `DLL_PROCESS_ATTACH`, calls each `_<dll>_fzentry(hInst, reason, reserved)`;
+  - an `IMAGE_TLS_DIRECTORY` named **`__tls_used`** pointing at a null-terminated
+    callback array → the callback, plus a tiny template + index slot.
+- relink adds that object and **`/INCLUDE:__tls_used`** so the linker wires the
+  PE's TLS data directory to it.
+
+Why it's clean: the loader passes the callback the **exe's own module handle**,
+so there is **no `__ImageBase` problem**; it runs under loader lock before VB,
+so SQLite is fully initialized by the time `Sub Main` runs. Harmless for DLLs
+that don't need it (UCL's `DllMainCRTStartup` just runs and returns), so vbfuse
+emits it for any fused DLL that has an entry point.
+
+> Caveat: TLS callbacks run under loader lock — fine for CRT heap/ctor init, but
+> a DLL whose init does `LoadLibrary`/COM/etc. could deadlock. Not seen with
+> UCL or SQLite; revisit if a future DLL misbehaves.
 
 ---
 
@@ -159,9 +179,13 @@ OBJ in and adding the `dll2lib` `.lib`, **but**:
 vbfuse app.vbp --fuse foo.dll [--fuse bar.dll ...] [--out fused.exe] [--run -- args]
   1. vbcapture : VB6 /make under debugger -> OBJs + link line
   2. vbobj_extern: rewrite the project OBJ's `foo.dll` Declare thunks -> externs
-  3. dll2lib   : foo.dll -> foo.lib  (no bootstrap)
-  4. LINK.EXE  : captured args + patched OBJ + foo.lib, /OPT:NOREF -> fused exe
+  3. dll2lib   : foo.dll -> foo.lib (expose _foo_fzentry); tlsinit -> fzinit.obj
+  4. LINK.EXE  : captured args + patched OBJ + foo.lib + fzinit.obj,
+                 /OPT:NOREF /INCLUDE:__tls_used -> fused exe
 ```
 
-Proven on the UCL sample: a VB6 app that `Declare`s `ucl_dll.dll` fuses into a
-standalone exe that compresses/decompresses correctly with the DLL deleted.
+Proven end to end:
+- **UCL** (32 KB, dynamic MSVCRT): compress/decompress roundtrip correct, DLL deleted.
+- **SQLite** (`sqlite3_vb6.dll`, 1 MB, static CRT, 12,824 relocs): opens an
+  in-memory DB and runs `SELECT 40+2` -> 42, DLL deleted. The TLS callback runs
+  SQLite's CRT init first, so the heap works.

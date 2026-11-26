@@ -41,19 +41,21 @@ Nothing is installed or permanently changed; VB6 compiles normally and the
 - ✓ **vbobj_extern**: validated on a real captured `vbTest.OBJ` — finds the 5
   `ucl_dll.dll` Declares, rewrites the thunks to `jmp _Func` + int3 padding,
   appends the externs (dumpbin confirms).
-- ✓ **End-to-end works**: `vbfuse UclTest.vbp --fuse ucl_dll.dll` fuses a VB6
-  app that `Declare`s `ucl_dll.dll` into a standalone exe that compresses and
-  decompresses correctly **with the DLL deleted** (`OK src=2250 comp=64
-  dec=2250`). One command: capture → vbobj_extern → dll2lib → relink.
-- ⧖ **Next**: the sqlite4vb demo (fuse `sqlite3.dll`); handle DLLs that need
-  CRT init (the bootstrap / `__ImageBase` problem — see `VB6_FUSION_NOTES.md` §5).
+- ✓ **UCL** (32 KB, dynamic MSVCRT): `vbfuse UclTest.vbp --fuse ucl_dll.dll`
+  fuses it into a standalone exe that compresses/decompresses correctly **with
+  the DLL deleted** (`OK src=2250 comp=64 dec=2250`).
+- ✓ **SQLite** (`sqlite3_vb6.dll`, 1 MB, **static CRT**, 12,824 relocs): fused
+  exe opens an in-memory DB and runs `SELECT 40+2` → 42, **DLL deleted**. The
+  static CRT is initialized at load via an injected **TLS callback** (no source
+  edit, no C compiler) — see `VB6_FUSION_NOTES.md` §5.
 
 See **`VB6_FUSION_NOTES.md`** for the full VB6 build model, the Declare-thunk
-format, the debugger-capture details, and the `/OPT:NOREF` + bootstrap gotchas.
+format, the debugger capture, the `/OPT:NOREF` rule, and the TLS-callback CRT-init.
 
-### Tools (current)
+### Tools
 `vbcapture.py` (debugger capture) · `vbobj_extern.py` (thunk→extern) ·
-`vbfuse.py` (the one command) · `trace_build.py` (the original investigation probe)
+`tlsinit.py` (TLS CRT-init object) · `vbfuse.py` (the one command) ·
+`trace_build.py` (original investigation probe)
 
 The UCL sample itself (third-party GPL binaries) lives outside this repo under
 `vbleg/`; these tools take paths as arguments.

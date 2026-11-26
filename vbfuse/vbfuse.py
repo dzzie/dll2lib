@@ -28,6 +28,7 @@ sys.path.insert(0, ROOT)
 
 import vbcapture                                   # noqa: E402
 from vbobj_extern import externalize, VbObjError   # noqa: E402
+from tlsinit import emit_tls_init                  # noqa: E402
 from pe32 import PE32                              # noqa: E402
 from convert import convert, ConvertError          # noqa: E402
 from msvc import vcrun                             # noqa: E402
@@ -100,19 +101,22 @@ def main(argv):
         print(f"      WARNING: no Declare matched {markers} -- nothing to fuse.")
         return 1
 
-    # 3) convert each DLL -> static .lib (no bootstrap: VC6 linker lacks __ImageBase)
+    # 3) convert each DLL -> static .lib. Expose each DLL's entry so a TLS
+    #    callback can run its CRT/DllMain init (no bootstrap -> no __ImageBase).
     print("[3/4] converting DLL(s) -> static lib(s)")
     libs = []
+    entry_syms = []
     for d in a.fuse:
         pe = PE32.from_file(d)
         if pe.refuse_reasons:
             print(f"      {os.path.basename(d)} not convertible: {pe.refuse_reasons}",
                   file=sys.stderr); return 1
+        stem = os.path.splitext(os.path.basename(d))[0]
+        esym = f"_{stem}_fzentry" if pe.address_of_entry_point else None
         try:
-            obj_bytes = convert(pe)
+            obj_bytes = convert(pe, entry_symbol=esym)
         except ConvertError as e:
             print(f"      convert {os.path.basename(d)}: {e}", file=sys.stderr); return 1
-        stem = os.path.splitext(os.path.basename(d))[0]
         with open(os.path.join(work, stem + ".obj"), "wb") as f:
             f.write(obj_bytes)
         r = vcrun(f'lib /nologo /out:"{stem}.lib" "{stem}.obj"', work)
@@ -120,7 +124,17 @@ def main(argv):
             print(f"      lib.exe failed for {stem}:\n{r.stdout}{r.stderr}", file=sys.stderr)
             return 1
         libs.append(stem + ".lib")
-        print(f"      {os.path.basename(d)} -> {stem}.lib")
+        if esym:
+            entry_syms.append(esym)
+        print(f"      {os.path.basename(d)} -> {stem}.lib"
+              f"{'  (+entry ' + esym + ')' if esym else ''}")
+
+    # emit a TLS-callback object that runs each fused DLL's entry at load time
+    tls_obj = None
+    if entry_syms:
+        tls_obj = os.path.join(work, "fzinit.obj")
+        emit_tls_init(entry_syms, tls_obj)
+        print(f"      TLS init object -> fzinit.obj (runs: {', '.join(entry_syms)})")
 
     # 4) relink with VB6's own LINK.EXE
     print("[4/4] relinking fused exe")
@@ -144,6 +158,9 @@ def main(argv):
             args.append(t)
     if not saw_noref:
         args.append("/OPT:NOREF")
+    if tls_obj:
+        args.append(tls_obj)
+        args.append("/INCLUDE:__tls_used")       # force the linker to wire the TLS dir
     args += [os.path.join(work, lib) for lib in libs]
 
     env = dict(os.environ); env["PATH"] = VB98 + ";" + env["PATH"]

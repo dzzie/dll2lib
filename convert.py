@@ -122,7 +122,7 @@ def _secname(name: str) -> str:
 
 
 def convert(pe: PE32, stdcall_args: dict[str, int] | None = None,
-            init_symbol: str | None = None) -> bytes:
+            init_symbol: str | None = None, entry_symbol: str | None = None) -> bytes:
     """Convert a parsed PE32 DLL to a COFF object.
 
     stdcall_args maps an export name to its __stdcall arg-byte count; for each,
@@ -251,6 +251,14 @@ def convert(pe: PE32, stdcall_args: dict[str, int] | None = None,
             fn_d = f"_{name}@{n}"
             cb.define(fn_d, off, cs.number, typ)
             cb.define("__imp_" + fn_d, slot, impsec.number)
+
+    # --- expose the DLL's original entry (DllMainCRTStartup) as a symbol so an
+    # external initializer (e.g. a TLS callback) can run the CRT/DllMain. ---
+    if entry_symbol and pe.address_of_entry_point:
+        ecs, eoff = find(pe.address_of_entry_point)
+        if ecs is None:
+            raise ConvertError("entry point RVA not in a carried section")
+        cb.define(entry_symbol, eoff, ecs.number, SYM_TYPE_FUNCTION)
 
     # --- DllMain/CRT bootstrap (S6) ---
     if init_symbol:
