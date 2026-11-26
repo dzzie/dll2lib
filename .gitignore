@@ -21,3 +21,6 @@ vb6_make.log
 !vbfuse/examples/**/*.dll
 !vbfuse/examples/**/*.exe
 !vbfuse/examples/**/VBStatic.exe
+
+# local-only tooling (kept in-tree for convenience, never committed)
+/private/
