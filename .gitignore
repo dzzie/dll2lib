@@ -1,0 +1,11 @@
+# Python
+__pycache__/
+*.pyc
+
+# stray local build artifacts (tests build in temp dirs, but just in case)
+*.obj
+*.lib
+*.exp
+*.exe
+*.dll
+!tests/**/*.dll
