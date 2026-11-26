@@ -160,6 +160,8 @@ def convert(pe: PE32, stdcall_args: dict[str, int] | None = None,
             cs.append(data)
         carried.append((ps, cs))
 
+    lowest_va = min((ps.virtual_address for ps, _ in carried), default=0)
+
     def find(rva: int):
         for ps, cs in carried:
             start = ps.virtual_address
@@ -188,12 +190,18 @@ def convert(pe: PE32, stdcall_args: dict[str, int] | None = None,
             addend = target_rva - iat_rva
         else:
             tps, tcs = find(target_rva)
-            if tcs is None:
+            if tcs is not None:
+                tsym = tcs.sym_index
+                addend = target_rva - tps.virtual_address
+            elif target_rva < lowest_va:
+                # pointer into the PE headers / image base (e.g. the CRT storing
+                # the module handle); rebase onto the fused exe's own image base.
+                tsym = cb.extern("___ImageBase")
+                addend = target_rva
+            else:
                 raise ConvertError(
                     f"reloc at RVA 0x{r.rva:X} targets 0x{target_rva:X}, "
                     f"outside carried sections")
-            tsym = tcs.sym_index
-            addend = target_rva - tps.virtual_address
         struct.pack_into("<I", cs.data, off, addend & 0xFFFFFFFF)
         cb.reloc(cs, off, tsym, REL_DIR32)
 
