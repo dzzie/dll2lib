@@ -1,0 +1,6 @@
+; Passed to dll2lib via /DEF. The export table stores the stdcall-stripped name
+; "AddNumbers", so this alias line tells dll2lib the arg-byte count (8 = two
+; ints) and it emits the decorated symbols _AddNumbers@8 / __imp__AddNumbers@8
+; that a __stdcall consumer references.
+EXPORTS
+    _AddNumbers@8=_AddNumbers

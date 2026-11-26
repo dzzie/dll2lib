@@ -1,0 +1,3 @@
+; MyStrLen takes one pointer (4 bytes) -> _MyStrLen@4.
+EXPORTS
+    _MyStrLen@4=_MyStrLen

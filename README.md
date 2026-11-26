@@ -39,6 +39,9 @@ dll2lib foo.dll [/OUT:foo.lib] [/DEF:foo.def] [/DUMP]
 Then in your program, call `foo_StaticInit()` once, then use the exports;
 link against `foo.lib` with no reference to `foo.dll`.
 
+See [`examples/`](examples/) for three runnable walkthroughs (a basic export,
+a DLL that calls `kernel32`, and a real `/MT` C++ DLL with a `DllMain`).
+
 ## Scope (v1)
 
 - **In:** PE32 / i386, HIGHLOW relocations, DLL has `.reloc`.

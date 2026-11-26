@@ -1,0 +1,3 @@
+; GetWidget takes no args -> _GetWidget@0.
+EXPORTS
+    _GetWidget@0=_GetWidget
