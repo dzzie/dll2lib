@@ -1,0 +1,35 @@
+MIT License
+
+Copyright (c) 2026 David Zimmer
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+This project's own code (dll2lib + vbfuse) is MIT-licensed as above. It builds
+on and bundles third-party components that retain their own licenses:
+
+- VB6-LinkAlchemy / VBStatic (c) UltraAlex0 — MIT
+  https://github.com/ultraalex00/VB6-LinkAlchemy
+- sqlite4vb VB6 classes (c) David Zimmer / sandsprite.com — MIT
+- SQLite — public domain (https://sqlite.org)
+- UCL compression library (c) Markus F.X.J. Oberhumer — GPL
+  (the bundled example DLL `ucl_dll.dll` is therefore GPL)
+
+See the top-level and per-example READMEs for full attribution.

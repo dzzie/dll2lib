@@ -181,3 +181,10 @@ Other third‑party components used in the demos are credited in their example
 folders: **sqlite4vb** (VB6 SQLite classes, © David Zimmer / sandsprite.com),
 **SQLite** (public domain), **UCL** (© Markus F.X.J. Oberhumer), and the VB6
 console helpers (wqweto; Karl E. Peterson's classic `MConsole.bas`).
+
+## License
+
+This project's own code (dll2lib + vbfuse) is **MIT** — see [`LICENSE`](LICENSE).
+Bundled third‑party components keep their own licenses (VB6‑LinkAlchemy/VBStatic
+MIT, sqlite4vb MIT, SQLite public‑domain, UCL GPL — so the example `ucl_dll.dll`
+is GPL); the `LICENSE` file and example READMEs spell this out.
