@@ -6,7 +6,8 @@ fused into a **single exe that depends on nothing but base Windows DLLs** — no
 
 ### Files
 - `SqlApp.vbp` / `modMain.bas` — the app: `Sub Main` opens a `:memory:` DB,
-  creates a table, inserts rows, queries them back, writes the result.
+  creates a table, inserts rows, queries them back, and **prints a report to the
+  console** (built with `--console`).
 - `modSQLite.bas`, `cSQLite.cls`, `cSQLiteAPI.cls`, `cSQLiteResults.cls`,
   `cSQLiteStatement.cls`, `cSQLiteColumn.cls`, `cSQLiteSchema.cls` — the real
   **sqlite4vb** OO class library (45 `Declare`s to `sqlite3_vb6.dll`),
@@ -18,20 +19,33 @@ fused into a **single exe that depends on nothing but base Windows DLLs** — no
 ### Build
 ```
 python build.py            (or:  build.cmd)
-python build.py --run      build, run, and write result.txt
+python build.py --run      build, then run (prints to the console)
 ```
 `build.py` invokes
-`vbfuse SqlApp.vbp --fuse sqlite3_vb6.dll --fuse-runtime …\msvbvm60.dll --vbstatic VBStatic.exe`.
+`vbfuse SqlApp.vbp --fuse sqlite3_vb6.dll --fuse-runtime …\msvbvm60.dll --vbstatic VBStatic.exe --console`.
 
-### Expected
+### Expected output
 ```
-version=3.53.0
-opened :memory:
-count=2 row2=fused
-OK cSQLite classes fused
+====================================================
+  SQLite + VB runtime  -  fully standalone (vbfuse)
+====================================================
+Fused in: sqlite3_vb6.dll (SQLite engine)
+          msvbvm60.dll   (the VB6 runtime, via VBStatic)
+This exe imports ONLY base Windows DLLs - run
+  dumpbin /imports on it: no msvbvm60, no sqlite3_vb6.
+
+  SQLite version         : 3.53.0
+  opened                 : :memory:
+  created + inserted     : table t, 2 rows
+  SELECT COUNT(*)        : 2
+  SELECT body WHERE id=2 : 'fused'
+
+[SUCCESS] A full SQLite engine + the VB6 runtime, running
+          from one self-contained exe. Everything is awesome.
 ```
-`dumpbin /imports sqlapp_fused.exe` shows only `KERNEL32 / USER32 / GDI32 /
-ADVAPI32 / OLE32 / OLEAUT32` — **no `msvbvm60.dll`, no `sqlite3_vb6.dll`.**
+Confirmed with the checked-in exe: `dumpbin /imports sqlapp_fused.exe` shows
+only `ADVAPI32 / GDI32 / KERNEL32 / OLE32 / OLEAUT32 / USER32` — **no
+`msvbvm60.dll`, no `sqlite3_vb6.dll`.**
 
 ### How two runtimes get initialized
 - SQLite's **static CRT** is initialized by an injected **TLS callback** the

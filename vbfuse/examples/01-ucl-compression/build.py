@@ -17,8 +17,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 VBFUSE = os.path.normpath(os.path.join(HERE, "..", "..", "vbfuse.py"))
 
 cmd = [sys.executable, VBFUSE, os.path.join(HERE, "UclTest.vbp"),
-       "--fuse", os.path.join(HERE, "ucl_dll.dll"),
+       "--fuse", os.path.join(HERE, "ucl_dll.dll"), "--console",
        "--out", os.path.join(HERE, "ucltest_fused.exe")]
 if "--run" in sys.argv:
-    cmd += ["--run", "--", os.path.join(HERE, "result.txt")]
+    cmd += ["--run"]          # console-subsystem exe: output goes to the console
 raise SystemExit(subprocess.call(cmd))

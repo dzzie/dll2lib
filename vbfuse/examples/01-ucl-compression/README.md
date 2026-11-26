@@ -4,24 +4,36 @@ A VB6 app that calls a C compression DLL (`ucl_dll.dll`) via `Declare`, fused
 into a standalone exe that needs no `ucl_dll.dll` at runtime.
 
 ### Files
-- `UclTest.vbp` / `modMain.bas` / `CUclCompression.cls` — the VB6 app
-  (`Sub Main` compresses a buffer, decompresses it, checks the roundtrip, writes
-  the result to the path given on the command line). **Unmodified** — the
-  `Declare ... Lib "ucl_dll.dll"` lines are left exactly as written.
+- `UclTest.vbp` / `modMain.bas` / `CUclCompression.cls` — the VB6 app.
+  `Sub Main` compresses a buffer, decompresses it, checks the roundtrip, and
+  prints a report to the console (built with `--console`). The
+  `Declare ... Lib "ucl_dll.dll"` lines in `CUclCompression.cls` are left
+  **exactly as written** — fusion needs no source edit.
 - `ucl_dll.dll` — the C DLL to fuse.
 - `ucltest_fused.exe` — the prebuilt fused result (checked in for analysis).
 
 ### Build
 ```
 python build.py            (or:  build.cmd)
-python build.py --run      build, run, and write result.txt
+python build.py --run      build, then run (prints to the console)
 ```
-`build.py` just invokes `vbfuse UclTest.vbp --fuse ucl_dll.dll`.
+`build.py` invokes `vbfuse UclTest.vbp --fuse ucl_dll.dll --console`.
 
-### Expected
-`ucltest_fused.exe <out.txt>` writes:
+### Expected output
 ```
-OK src=2250 comp=64 dec=2250
+==============================================
+  UCL compression  -  fused standalone (vbfuse)
+==============================================
+ucl_dll.dll (C compression DLL) is FUSED into this exe.
+No ucl_dll.dll is needed at runtime.
+
+  input        : 2250 bytes
+  compressed   : 64 bytes  (35.2x smaller)
+  decompressed : 2250 bytes
+  roundtrip    : OK - matches the original
+
+[SUCCESS] Real UCL compression ran entirely from fused code.
+          Everything is awesome.
 ```
 Delete `ucl_dll.dll` first if you like — the fused exe doesn't need it.
 

@@ -2,7 +2,9 @@
 
 Each folder is a complete, buildable demo: the VB6 app sources, the C DLL to
 fuse, a `build.py` / `build.cmd`, and the **prebuilt fused exe** (checked in so
-you can inspect/run the result without building).
+you can inspect/run the result without building). Both are built with
+`--console` and **print a report to the console when run**, so you can see the
+fused code actually working.
 
 | Folder | Fuses | Result |
 |---|---|---|
@@ -16,7 +18,7 @@ Needs **VB6 (VB98)** installed and the **x86 MS Build Tools** on PATH (open an
 
 ```
 python build.py            # or  build.cmd
-python build.py --run      # build, run, and write result.txt
+python build.py --run      # build, then run (prints its report to the console)
 ```
 
 The prebuilt `*_fused.exe` is already in each folder if you just want to analyze

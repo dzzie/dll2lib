@@ -23,8 +23,8 @@ MSVBVM = r"C:\Windows\SysWOW64\msvbvm60.dll"
 cmd = [sys.executable, VBFUSE, os.path.join(HERE, "SqlApp.vbp"),
        "--fuse", os.path.join(HERE, "sqlite3_vb6.dll"),
        "--fuse-runtime", MSVBVM,
-       "--vbstatic", os.path.join(HERE, "VBStatic.exe"),
+       "--vbstatic", os.path.join(HERE, "VBStatic.exe"), "--console",
        "--out", os.path.join(HERE, "sqlapp_fused.exe")]
 if "--run" in sys.argv:
-    cmd += ["--run", "--", os.path.join(HERE, "result.txt")]
+    cmd += ["--run"]          # console-subsystem exe: output goes to the console
 raise SystemExit(subprocess.call(cmd))

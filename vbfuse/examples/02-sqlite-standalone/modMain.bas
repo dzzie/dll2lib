@@ -1,41 +1,49 @@
 Attribute VB_Name = "modMain"
 Option Explicit
 
-Private gOut As String
+Private Declare Function GetStdHandle Lib "kernel32" (ByVal nStdHandle As Long) As Long
+Private Declare Function WriteFile Lib "kernel32" (ByVal hFile As Long, lpBuffer As Any, ByVal nBytes As Long, lpWritten As Long, ByVal lpOverlapped As Long) As Long
 
-Private Sub L(ByVal msg As String)
-    Dim f As Integer
-    f = FreeFile
-    Open gOut For Append As #f
-    Print #f, msg
-    Close #f
+Private Sub outln(ByVal s As String)
+    Dim b() As Byte, w As Long
+    s = s & vbCrLf
+    b = StrConv(s, vbFromUnicode)
+    WriteFile GetStdHandle(-11&), b(0), UBound(b) + 1, w, 0&
 End Sub
 
 Sub Main()
-    gOut = Trim$(Command$())
-    If Len(gOut) = 0 Then gOut = App.Path & "\sqlite_result.txt"
-    On Error Resume Next
-    If Dir(gOut) <> "" Then Kill gOut
-    On Error GoTo 0
-
     On Error GoTo fail
+    outln "===================================================="
+    outln "  SQLite + VB runtime  -  fully standalone (vbfuse)"
+    outln "===================================================="
+    outln "Fused in: sqlite3_vb6.dll (SQLite engine)"
+    outln "          msvbvm60.dll   (the VB6 runtime, via VBStatic)"
+    outln "This exe imports ONLY base Windows DLLs - run"
+    outln "  dumpbin /imports on it: no msvbvm60, no sqlite3_vb6."
+    outln ""
+
     Dim db As New cSQLite
-    L "version=" & db.Version
+    outln "  SQLite version         : " & db.Version
     db.OpenDB ":memory:"
-    L "opened :memory:"
+    outln "  opened                 : :memory:"
     db.Execute "CREATE TABLE t(id INTEGER PRIMARY KEY, body TEXT)"
     db.Execute "INSERT INTO t(body) VALUES('hello'), ('fused')"
+    outln "  created + inserted     : table t, 2 rows"
+
     Dim n As Long, s As String
     n = db.Scalar("SELECT COUNT(*) FROM t")
     s = db.Scalar("SELECT body FROM t WHERE id = 2")
     db.CloseDB
-    L "count=" & n & " row2=" & s
+    outln "  SELECT COUNT(*)        : " & n
+    outln "  SELECT body WHERE id=2 : '" & s & "'"
+    outln ""
     If n = 2 And s = "fused" Then
-        L "OK cSQLite classes fused"
+        outln "[SUCCESS] A full SQLite engine + the VB6 runtime, running"
+        outln "          from one self-contained exe. Everything is awesome."
     Else
-        L "MISMATCH n=" & n & " s=" & s
+        outln "[FAIL] n=" & n & " s=" & s
     End If
     Exit Sub
 fail:
-    L "FAIL " & Err.Number & ": " & Err.Description
+    outln "[ERROR] " & Err.Number & ": " & Err.Description
 End Sub

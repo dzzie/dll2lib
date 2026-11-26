@@ -1,11 +1,54 @@
-# dll2lib
+# dll2lib + vbfuse
 
-Convert a shipped **PE32 (i386) DLL into a full *static* COFF `.lib`** — the
-library's code and data *are* the DLL's implementation, so a consumer can link
-it and run with **no DLL present at runtime** (the way Binary Soft's old
-"DLL to Lib" worked). This is **not** an import/stub lib.
+**Fuse DLLs into the program that uses them** — so it ships as one self‑contained
+executable with no DLLs beside it at runtime.
 
-## How it works
+Two tools, one idea:
+
+- **`dll2lib`** turns a shipped **PE32 (i386) DLL into a full *static* COFF
+  `.lib`**. The library's code and data *are* the DLL's implementation, so a
+  consumer links it and runs with **no DLL present at runtime** (the way Binary
+  Soft's old "DLL to Lib" worked). This is **not** an import/stub lib.
+- **`vbfuse`** is a front end built on `dll2lib` for the VB6 world: take a
+  normally‑compiled VB6 app that calls C DLLs via `Declare Lib "foo.dll"`, and
+  fuse those DLLs — and optionally **the VB6 runtime `msvbvm60.dll` itself** —
+  straight into the `.exe`. **No source edits, no linker swap, no add‑in.**
+
+The payoff: a VB6 application + its C DLLs + the VB runtime collapse into **one
+exe that imports nothing but base Windows DLLs**.
+
+## See it work
+
+Both demos in [`vbfuse/examples/`](vbfuse/examples/) are built with `--console`
+and print a report when run — the prebuilt exes are checked in, so you can run
+them without building anything.
+
+**`01-ucl-compression`** — a C compression DLL fused in:
+
+```
+  input        : 2250 bytes
+  compressed   : 64 bytes  (35.2x smaller)
+  decompressed : 2250 bytes
+  roundtrip    : OK - matches the original
+[SUCCESS] Real UCL compression ran entirely from fused code.
+```
+
+**`02-sqlite-standalone`** — the SQLite engine **and** the VB6 runtime fused into
+one exe (`dumpbin /imports` shows only `ADVAPI32/GDI32/KERNEL32/OLE32/OLEAUT32/USER32`):
+
+```
+  SQLite version         : 3.53.0
+  opened                 : :memory:
+  SELECT COUNT(*)        : 2
+  SELECT body WHERE id=2 : 'fused'
+[SUCCESS] A full SQLite engine + the VB6 runtime, running from one exe.
+```
+
+---
+
+## dll2lib — the engine
+
+### How it works
 
 A DLL with an intact `.reloc` table is nearly a relocatable object already.
 dll2lib:
@@ -23,10 +66,7 @@ dll2lib:
    using any export;
 7. invokes MS `lib.exe` to wrap the object into a `.lib`.
 
-Inspired by / lifted from **VBStatic** (VB6-LinkAlchemy), which does exactly
-this for `msvbvm60.dll`.
-
-## Usage
+### Usage
 
 ```
 dll2lib foo.dll [/OUT:foo.lib] [/DEF:foo.def] [/DUMP]
@@ -36,13 +76,12 @@ dll2lib foo.dll [/OUT:foo.lib] [/DEF:foo.def] [/DUMP]
 - `/DEF:foo.def` — supply stdcall decoration via alias lines (`_Func@8=_Func`).
 - Default: convert → write `foo.obj` → `lib.exe` → `foo.lib`.
 
-Then in your program, call `foo_StaticInit()` once, then use the exports;
-link against `foo.lib` with no reference to `foo.dll`.
+Then in your program, call `foo_StaticInit()` once, then use the exports; link
+against `foo.lib` with no reference to `foo.dll`. See [`examples/`](examples/)
+for three runnable walkthroughs (a basic export, a DLL that calls `kernel32`,
+and a real `/MT` C++ DLL with a `DllMain`).
 
-See [`examples/`](examples/) for three runnable walkthroughs (a basic export,
-a DLL that calls `kernel32`, and a real `/MT` C++ DLL with a `DllMain`).
-
-## Scope (v1)
+### Scope (v1)
 
 - **In:** PE32 / i386, HIGHLOW relocations, DLL has `.reloc`.
 - **Out / refused:** x64/PE32+, reloc-stripped DLLs (rebuild `/FIXED:NO`),
@@ -50,26 +89,9 @@ a DLL that calls `kernel32`, and a real `/MT` C++ DLL with a `DllMain`).
 - Merging code sections into one section means the **whole** DLL is carried
   (no dead-code elimination — that's a separate delinking problem).
 
-## Toolchain
+### Status
 
-Python 3 + MS Build Tools (x86: `cl` / `link` / `lib` / `dumpbin`, via
-`vcvars32`). No third-party Python dependencies — the PE reader and COFF
-writer are hand-rolled.
-
-## Layout
-
-| File | Purpose |
-|---|---|
-| `pe32.py` | dependency-free PE32 reader |
-| `coff.py` | hand-rolled i386 COFF object writer |
-| `convert.py` | the converter (sections, relocs, exports, imports, bootstrap) |
-| `msvc.py` | locate/run the x86 MS tools |
-| `dll2lib.py` | CLI |
-| `tests/run_s*.py` | staged build-and-run tests (S0–S6), each self-checking |
-
-## Status
-
-Staged, each gated by a link-and-run test (`tests/run_s0.py` … `run_s6.py`):
+Staged, each gated by a link-and-run test (`tests/run_s0.py` … `run_s7_rsrc.py`):
 
 - **S0** PE reader — validated against `dumpbin` on 8 system DLLs
 - **S1** COFF writer — hand-built obj links + runs
@@ -78,33 +100,68 @@ Staged, each gated by a link-and-run test (`tests/run_s0.py` … `run_s6.py`):
 - **S4** imports — `.idata$*` rebuild (fused exe pulls `kernel32!lstrlenA`)
 - **S5** relocs — data→code / data→data / code→data all converted
 - **S6** bootstrap — `DllMain`/CRT init runs via `_<dll>_StaticInit`
-- **S7** real-world hardening:
-  - a real `/MT /GS` C++ DLL (CRT + global ctor + `DllMain`, ~1800 relocs) fuses and runs
-  - **section-merge** — multiple code sections joined by reloc-less `rel32` merged into one `.text`
-  - **TLS** — a DLL with a TLS directory is cleanly refused
-  - **resources** — `.rsrc` is skipped (code still works; resource lookups are a v2 item)
+- **S7** real-world hardening: a `/MT /GS` C++ DLL (CRT + global ctor +
+  `DllMain`, ~1800 relocs) fuses and runs; multi-code-section **merge**; **TLS**
+  cleanly refused; **resources** skipped.
 
 All 11 stage tests green (`tests/run_s0.py` … `run_s7_rsrc.py`).
 
-## vbfuse — fuse C DLLs (and the VB6 runtime) into a compiled VB6 exe
+---
 
-[`vbfuse/`](vbfuse/) is a front end that uses dll2lib to make a **standalone VB6
-executable**: it takes a normally‑compiled VB6 project that calls C DLLs via
-`Declare Lib "foo.dll"` and fuses those DLLs in — **no source edits, no linker
-swap, no add‑in**. With `--fuse-runtime` it also fuses `msvbvm60.dll`, producing
-an exe that imports only base Windows DLLs.
+## vbfuse — standalone VB6 executables
+
+[`vbfuse/`](vbfuse/) makes a VB6 project self-contained. A VB6
+`Declare Lib "foo.dll"` is **not** an import — `msvbvm60`'s `DllFunctionCall`
+does `LoadLibrary`/`GetProcAddress` at runtime, and VB6/C2 compiles each
+`Declare` into a 25-byte thunk in the project `.OBJ`. So vbfuse can't just link
+a `.lib`; it:
+
+1. runs `VB6.EXE /make` **under a debugger** and captures the OBJs + the link
+   command at the `LINK.EXE` spawn (VB6 deletes the OBJs afterward);
+2. rewrites the project OBJ's `Declare` thunks into **linker externs**, using the
+   DLL's own name as the marker — **no VB source edit**;
+3. converts each DLL to a static `.lib` with dll2lib, and injects a **TLS
+   callback** that runs each DLL's CRT/`DllMain` init at load (before the VB
+   entry, so a static-CRT DLL's heap is ready);
+4. relinks with VB6's own `LINK.EXE` (forcing `/OPT:NOREF`, since VB6's
+   `/OPT:REF` would dead-strip the fused code).
+
+With `--fuse-runtime`, it also fuses `msvbvm60.dll` via **VBStatic** (see
+Credits) for a fully standalone exe.
 
 ```
-vbfuse app.vbp --fuse foo.dll [--fuse-runtime C:\Windows\SysWOW64\msvbvm60.dll]
+vbfuse app.vbp --fuse foo.dll [--fuse bar.dll ...]
+       [--fuse-runtime C:\Windows\SysWOW64\msvbvm60.dll [--vbstatic VBStatic.exe]]
+       [--console] [--out fused.exe] [--run [-- args]]
 ```
 
-It drives the VB6 compile under a debugger to capture the OBJs, rewrites the
-`Declare` thunks into linker externs, converts the DLLs with dll2lib, injects a
-TLS callback to run any static‑CRT init, and relinks. See
-[`vbfuse/README.md`](vbfuse/README.md), [`vbfuse/VB6_FUSION_NOTES.md`](vbfuse/VB6_FUSION_NOTES.md),
-and runnable demos in [`vbfuse/examples/`](vbfuse/examples/) (including a VB6
-SQLite app fused into a single exe that needs neither `sqlite3_vb6.dll` nor
-`msvbvm60.dll`).
+- `--console` builds the exe with the CONSOLE subsystem, so a VB
+  `ConsolePrint`-style `Sub` can write to stdout — handy for testing.
+
+See [`vbfuse/README.md`](vbfuse/README.md), the full knowledge dump in
+[`vbfuse/VB6_FUSION_NOTES.md`](vbfuse/VB6_FUSION_NOTES.md), and the runnable
+demos in [`vbfuse/examples/`](vbfuse/examples/).
+
+---
+
+## Toolchain
+
+Python 3 + MS Build Tools (x86: `cl` / `link` / `lib` / `dumpbin`, via
+`vcvars32`); vbfuse additionally needs **VB6 (VB98)** installed. No third-party
+Python dependencies — the PE reader and COFF writer are hand-rolled.
+
+## Layout
+
+| Path | Purpose |
+|---|---|
+| `pe32.py` | dependency-free PE32 reader |
+| `coff.py` | hand-rolled i386 COFF object writer |
+| `convert.py` | the converter (sections, relocs, exports, imports, bootstrap) |
+| `msvc.py` | locate/run the x86 MS tools |
+| `dll2lib.py` | the dll2lib CLI |
+| `tests/run_s*.py` | staged build-and-run tests (S0–S7), each self-checking |
+| `vbfuse/` | the VB6 fusion front end (`vbfuse.py`, `vbcapture.py`, `vbobj_extern.py`, `tlsinit.py`) |
+| `vbfuse/examples/` | two runnable demos + their prebuilt fused exes |
 
 ## Credits & acknowledgements
 
@@ -112,7 +169,8 @@ The whole VB6 side of this project stands on **VB6‑LinkAlchemy** by
 **UltraAlex0** — the project that pioneered embedding `MSVBVM60.DLL` into a VB6
 EXE/DLL. Its **VBStatic** tool is what `vbfuse --fuse-runtime` uses to fuse the
 VB6 runtime, and `vbfuse/vbobj_extern.py` is a direct Python port of its
-**VBExtern** (the `Declare`‑thunk → linker‑extern rewrite). Enormous thanks —
+**VBExtern** (the `Declare`‑thunk → linker‑extern rewrite). dll2lib itself takes
+its COFF-object approach from LinkAlchemy's **VBStatic.bas**. Enormous thanks —
 this would not exist without that work.
 
 - VB6‑LinkAlchemy: https://github.com/ultraalex00/VB6-LinkAlchemy
@@ -120,4 +178,5 @@ this would not exist without that work.
 
 Other third‑party components used in the demos are credited in their example
 folders: **sqlite4vb** (VB6 SQLite classes, © David Zimmer / sandsprite.com),
-**SQLite** (public domain), and **UCL** (© Markus F.X.J. Oberhumer).
+**SQLite** (public domain), **UCL** (© Markus F.X.J. Oberhumer), and the VB6
+console helpers (wqweto; Karl E. Peterson's classic `MConsole.bas`).
