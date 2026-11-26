@@ -10,6 +10,7 @@ full_work/
 *.pdb
 *result.txt
 vb6_make.log
+*.vbw
 
 # EXE/DLL/LIB are ignored by default (build artifacts) ...
 *.exe
