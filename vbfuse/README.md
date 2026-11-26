@@ -53,6 +53,20 @@ Nothing is installed or permanently changed; VB6 compiles normally and the
   Declares) fuses into a 1.1 MB standalone exe that opens `:memory:`, creates a
   table, inserts rows and queries them back (`count=2 row2=fused`) with the DLL
   deleted and **no source change** to the classes.
+- ✓ **Fully standalone (`--fuse-runtime`)**: the same app with **both** SQLite
+  *and* the VB6 runtime (`msvbvm60.dll`) fused — a single 2.5 MB exe that
+  imports only base Windows DLLs (kernel32/user32/gdi32/advapi32/ole32/oleaut32),
+  **no `msvbvm60.dll`, no `sqlite3_vb6.dll`** — and still runs the live DB.
+  The VB runtime is fused by LinkAlchemy's **VBStatic** (compiled once); vbfuse
+  drives it and relinks with `/ENTRY:_VBStaticEntry /NODEFAULTLIB`.
+
+## Usage
+
+```
+vbfuse <project.vbp> --fuse foo.dll [--fuse bar.dll ...]
+       [--fuse-runtime C:\Windows\SysWOW64\msvbvm60.dll [--vbstatic VBStatic.exe]]
+       [--out fused.exe] [--run [-- <args>]]
+```
 
 See **`VB6_FUSION_NOTES.md`** for the full VB6 build model, the Declare-thunk
 format, the debugger capture, the `/OPT:NOREF` rule, and the TLS-callback CRT-init.

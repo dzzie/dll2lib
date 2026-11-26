@@ -37,6 +37,17 @@ VB98 = os.path.dirname(vbcapture.VB6_EXE)
 LINK_EXE = os.path.join(VB98, "LINK.EXE")
 
 
+def find_vbstatic():
+    import glob
+    here_up = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))  # .../fuser
+    for pat in (os.path.join(here_up, "VB6-LinkAlchemy*", "vbstatic", "VBStatic.exe"),
+                os.path.join(os.path.expanduser("~"), "Desktop", "**", "VBStatic.exe")):
+        hits = glob.glob(pat, recursive=True)
+        if hits:
+            return hits[0]
+    return None
+
+
 def tokenize(s: str):
     toks, cur, inq, started = [], "", False, False
     for ch in s:
@@ -61,6 +72,10 @@ def main(argv):
     ap.add_argument("vbp")
     ap.add_argument("--fuse", action="append", default=[], metavar="DLL",
                     help="C DLL to fuse in (repeatable)")
+    ap.add_argument("--fuse-runtime", metavar="MSVBVM60",
+                    help="also fuse the VB6 runtime (msvbvm60.dll) via VBStatic "
+                         "-> a fully standalone exe")
+    ap.add_argument("--vbstatic", help="path to VBStatic.exe (for --fuse-runtime)")
     ap.add_argument("--out", help="output exe (default <exe>_fused.exe next to the vbp)")
     ap.add_argument("--work", help="work dir (default <projdir>\\vbfuse_work)")
     ap.add_argument("--run", action="store_true", help="run the fused exe when done")
@@ -101,6 +116,14 @@ def main(argv):
         print(f"      WARNING: no Declare matched {markers} -- nothing to fuse.")
         return 1
 
+    # identify the exe + main project OBJ from the captured link line
+    link_toks = tokenize(cap.link_cmd)[1:]
+    orig_out = next((t.split(":", 1)[1] for t in link_toks if t.upper().startswith("/OUT:")), "out.exe")
+    exe_stem = os.path.splitext(os.path.basename(orig_out))[0]
+    fused = os.path.abspath(a.out) if a.out else os.path.join(proj_dir, exe_stem + "_fused.exe")
+    main_obj = next((o for o in cap.objs
+                     if os.path.splitext(os.path.basename(o))[0].lower() == exe_stem.lower()), None)
+
     # 3) convert each DLL -> static .lib. Expose each DLL's entry so a TLS
     #    callback can run its CRT/DllMain init (no bootstrap -> no __ImageBase).
     print("[3/4] converting DLL(s) -> static lib(s)")
@@ -136,28 +159,49 @@ def main(argv):
         emit_tls_init(entry_syms, tls_obj)
         print(f"      TLS init object -> fzinit.obj (runs: {', '.join(entry_syms)})")
 
-    # 4) relink with VB6's own LINK.EXE
-    print("[4/4] relinking fused exe")
-    toks = tokenize(cap.link_cmd)[1:]        # drop the leading "LINK"
-    orig_out = next((t.split(":", 1)[1] for t in toks if t.upper().startswith("/OUT:")), "out.exe")
-    stem = os.path.splitext(os.path.basename(orig_out))[0]
-    fused = os.path.abspath(a.out) if a.out else os.path.join(proj_dir, stem + "_fused.exe")
+    # 3b) optionally fuse the VB6 runtime (msvbvm60) via VBStatic
+    runtime_fused = False
+    if a.fuse_runtime:
+        vbs = a.vbstatic or find_vbstatic()
+        if not vbs or not os.path.isfile(vbs):
+            print("--fuse-runtime: VBStatic.exe not found; pass --vbstatic <path>",
+                  file=sys.stderr); return 1
+        if not main_obj:
+            print("could not identify the main project OBJ for VBStatic", file=sys.stderr); return 1
+        print(f"[3b] fusing VB runtime {os.path.basename(a.fuse_runtime)} via VBStatic")
+        r = subprocess.run([vbs, os.path.abspath(a.fuse_runtime), main_obj],
+                           capture_output=True, text=True)
+        if r.returncode != 0:
+            print(f"VBStatic failed:\n{r.stdout}{r.stderr}", file=sys.stderr); return 1
+        runtime_fused = True
+        print(f"      fused msvbvm60 into {os.path.basename(main_obj)} "
+              f"({os.path.getsize(main_obj)} bytes)")
 
-    obj_map = {os.path.basename(p).lower(): p for p in cap.objs}
-    args = [LINK_EXE]
-    saw_noref = False
-    for t in toks:
-        tl, tu = t.lower(), t.upper()
-        if tl.endswith(".obj"):
-            args.append(obj_map.get(os.path.basename(t).lower(), t))
-        elif tu.startswith("/OUT:"):
-            args.append("/OUT:" + fused)
-        elif tu == "/OPT:REF" or tu == "/OPT:NOREF":
-            args.append("/OPT:NOREF"); saw_noref = True
-        else:
-            args.append(t)
-    if not saw_noref:
-        args.append("/OPT:NOREF")
+    # 4) relink
+    print("[4/4] relinking fused exe")
+    if runtime_fused:
+        # VBStatic put the runtime (and the symbols the other OBJs need) into the
+        # main OBJ -> use its entry/flags, link all captured OBJs, no VBAEXE6.LIB.
+        ordered = sorted(cap.objs, key=lambda o: 0 if o == main_obj else 1)
+        args = [LINK_EXE, "/NOLOGO", "/SUBSYSTEM:WINDOWS,4.0", "/NODEFAULTLIB",
+                "/ENTRY:_VBStaticEntry", "/BASE:0x400000", "/INCREMENTAL:NO",
+                "/OPT:NOREF", "/IGNORE:4078", "/OUT:" + fused] + ordered
+    else:
+        obj_map = {os.path.basename(p).lower(): p for p in cap.objs}
+        args = [LINK_EXE]
+        saw_noref = False
+        for t in link_toks:
+            tl, tu = t.lower(), t.upper()
+            if tl.endswith(".obj"):
+                args.append(obj_map.get(os.path.basename(t).lower(), t))
+            elif tu.startswith("/OUT:"):
+                args.append("/OUT:" + fused)
+            elif tu == "/OPT:REF" or tu == "/OPT:NOREF":
+                args.append("/OPT:NOREF"); saw_noref = True
+            else:
+                args.append(t)
+        if not saw_noref:
+            args.append("/OPT:NOREF")
     if tls_obj:
         args.append(tls_obj)
         args.append("/INCLUDE:__tls_used")       # force the linker to wire the TLS dir

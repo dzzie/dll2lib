@@ -189,3 +189,32 @@ Proven end to end:
 - **SQLite** (`sqlite3_vb6.dll`, 1 MB, static CRT, 12,824 relocs): opens an
   in-memory DB and runs `SELECT 40+2` -> 42, DLL deleted. The TLS callback runs
   SQLite's CRT init first, so the heap works.
+
+## 7. Also fusing the VB6 runtime (`--fuse-runtime`, via VBStatic)
+
+A VB6 exe normally imports `msvbvm60.dll`. To make a *fully* standalone exe,
+vbfuse also fuses the runtime using LinkAlchemy's **VBStatic** (compiled once to
+`VBStatic.exe`; run it with console subsystem so its log is capturable). Order
+in the pipeline:
+
+1. `vbobj_extern` externalizes the C-DLL Declares in the main project OBJ.
+2. **`VBStatic.exe msvbvm60.dll <main>.OBJ`** fuses `msvbvm60` into that same OBJ
+   (merges its `.text`/`ENGINE`->`.vbrt`, rebuilds the runtime's own imports,
+   turns the main OBJ's `msvbvm60` IAT into relocations into the embedded code,
+   defines the `natsupp.obj` globals so `VBAEXE6.LIB` isn't needed, builds
+   `_VBStaticEntry` which runs `msvbvm60`'s `DllMain` then jumps to `___vbaS`,
+   and merges the runtime's resources). The **main OBJ then defines the runtime
+   symbols for all the other project OBJs**, so they link against it.
+3. Relink with VBStatic's contract, **not** the captured VB6 args:
+   `/NODEFAULTLIB /ENTRY:_VBStaticEntry /SUBSYSTEM:WINDOWS /BASE:0x400000`,
+   all captured OBJs (main first), no `VBAEXE6.LIB`, plus the C `.lib`(s) and the
+   TLS init object (`/OPT:NOREF /INCLUDE:__tls_used`).
+
+Both init paths coexist: the **TLS callback** (loader, pre-entry) initializes the
+fused C DLL's static CRT; **`_VBStaticEntry`** (the exe entry) initializes the
+fused `msvbvm60` then runs `Sub Main`.
+
+Proven: the real `sqlite4vb` OO-class app fuses SQLite **and** `msvbvm60` into a
+single 2.5 MB exe whose import table is only base Windows DLLs
+(kernel32/user32/gdi32/advapi32/ole32/oleaut32) — it runs the in-memory DB with
+neither `sqlite3_vb6.dll` nor `msvbvm60.dll` present, no source changes.
