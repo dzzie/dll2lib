@@ -32,6 +32,14 @@ Function EnsureDLL() As Boolean
 
     Dim f As String
     
+    ' Fusion-aware: if the VB6 runtime (msvbvm60) is not a loaded module,
+    ' this is a fused / standalone build - the SQLite engine is fused in
+    ' too, so there is no DLL to load. Report success without touching disk.
+    If GetModuleHandle("msvbvm60.dll") = 0 Then
+        EnsureDLL = True
+        Exit Function
+    End If
+    
     If hDll <> 0 Then
         EnsureDLL = True
         Exit Function

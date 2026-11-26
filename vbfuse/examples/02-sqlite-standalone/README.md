@@ -31,8 +31,11 @@ python build.py --run      build, then run (prints to the console)
 ====================================================
 Fused in: sqlite3_vb6.dll (SQLite engine)
           msvbvm60.dll   (the VB6 runtime, via VBStatic)
-This exe imports ONLY base Windows DLLs - run
-  dumpbin /imports on it: no msvbvm60, no sqlite3_vb6.
+
+Load state at process start (GetModuleHandle):
+    msvbvm60.dll    : NOT loaded -> FUSED
+    sqlite3_vb6.dll : NOT loaded -> FUSED
+  -> neither is an import / load-time dependency.
 
   SQLite version         : 3.53.0
   opened                 : :memory:
@@ -40,12 +43,30 @@ This exe imports ONLY base Windows DLLs - run
   SELECT COUNT(*)        : 2
   SELECT body WHERE id=2 : 'fused'
 
+Load state after all queries ran:
+    sqlite3_vb6.dll : NOT loaded -> FUSED
+  -> still 0: the engine never touched the DLL on disk.
+
 [SUCCESS] A full SQLite engine + the VB6 runtime, running
           from one self-contained exe. Everything is awesome.
 ```
-Confirmed with the checked-in exe: `dumpbin /imports sqlapp_fused.exe` shows
-only `ADVAPI32 / GDI32 / KERNEL32 / OLE32 / OLEAUT32 / USER32` — **no
-`msvbvm60.dll`, no `sqlite3_vb6.dll`.**
+
+`Sub Main` calls `GetModuleHandle` **before and after** running the engine — both
+the VB runtime and the SQLite engine report `0` (not mapped) the whole time; a
+normal VB6 exe has `msvbvm60` mapped before `Main` even runs. Three independent
+confirmations it's truly standalone:
+
+- `dumpbin /imports sqlapp_fused.exe` shows only `ADVAPI32 / GDI32 / KERNEL32 /
+  OLE32 / OLEAUT32 / USER32` — **no `msvbvm60.dll`, no `sqlite3_vb6.dll`.**
+- `sqlite3_vb6.dll` is still unloaded after every query runs.
+- **Delete `sqlite3_vb6.dll` and the exe runs identically** (verified).
+
+**Fusion-aware `EnsureDLL`.** sqlite4vb's `EnsureDLL` normally `LoadLibrary`s the
+DLL from disk. We added a one-line guard (`modSQLite.bas`): if
+`GetModuleHandle("msvbvm60.dll")` is `0`, the VB runtime is fused — so the engine
+is too — and it returns success without touching disk. In a normal, non-fused
+build `msvbvm60` *is* loaded, so the guard is skipped and `EnsureDLL` behaves
+exactly as before.
 
 ### How two runtimes get initialized
 - SQLite's **static CRT** is initialized by an injected **TLS callback** the

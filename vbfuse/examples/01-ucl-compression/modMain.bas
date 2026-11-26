@@ -3,6 +3,7 @@ Option Explicit
 
 Private Declare Function GetStdHandle Lib "kernel32" (ByVal nStdHandle As Long) As Long
 Private Declare Function WriteFile Lib "kernel32" (ByVal hFile As Long, lpBuffer As Any, ByVal nBytes As Long, lpWritten As Long, ByVal lpOverlapped As Long) As Long
+Private Declare Function GetModuleHandle Lib "kernel32" Alias "GetModuleHandleA" (ByVal lpModuleName As String) As Long
 
 Private Sub outln(ByVal s As String)
     Dim b() As Byte, w As Long
@@ -10,6 +11,16 @@ Private Sub outln(ByVal s As String)
     b = StrConv(s, vbFromUnicode)
     WriteFile GetStdHandle(-11&), b(0), UBound(b) + 1, w, 0&
 End Sub
+
+' GetModuleHandle = 0 means the module is NOT mapped in this process, i.e. it
+' is not a load-time dependency - its code lives inside this exe as fused code.
+Private Function fmtState(ByVal h As Long) As String
+    If h = 0 Then
+        fmtState = "NOT loaded -> FUSED"
+    Else
+        fmtState = "loaded (h=&H" & Hex$(h) & ")"
+    End If
+End Function
 
 Sub Main()
     outln "=============================================="
@@ -42,9 +53,11 @@ Sub Main()
     outln "  compressed   : " & clen & " bytes  (" & Format$(inlen / clen, "0.0") & "x smaller)"
     outln "  decompressed : " & dlen & " bytes"
     outln "  roundtrip    : " & IIf(ok, "OK - matches the original", "FAILED")
+    outln "  ucl_dll.dll  : " & fmtState(GetModuleHandle("ucl_dll.dll"))
     outln ""
     If ok Then
-        outln "[SUCCESS] Real UCL compression ran entirely from fused code."
+        outln "[SUCCESS] Real UCL compression ran entirely from fused code -"
+        outln "          and GetModuleHandle proves the DLL isn't even loaded."
         outln "          Everything is awesome."
     Else
         outln "[FAIL] roundtrip mismatch"

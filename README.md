@@ -30,6 +30,7 @@ them without building anything.
   compressed   : 64 bytes  (35.2x smaller)
   decompressed : 2250 bytes
   roundtrip    : OK - matches the original
+  ucl_dll.dll  : NOT loaded -> FUSED        (GetModuleHandle = 0)
 [SUCCESS] Real UCL compression ran entirely from fused code.
 ```
 
@@ -37,8 +38,9 @@ them without building anything.
 one exe (`dumpbin /imports` shows only `ADVAPI32/GDI32/KERNEL32/OLE32/OLEAUT32/USER32`):
 
 ```
+  msvbvm60.dll    : NOT loaded -> FUSED     (GetModuleHandle = 0)
+  sqlite3_vb6.dll : NOT loaded -> FUSED     (still 0 after every query)
   SQLite version         : 3.53.0
-  opened                 : :memory:
   SELECT COUNT(*)        : 2
   SELECT body WHERE id=2 : 'fused'
 [SUCCESS] A full SQLite engine + the VB6 runtime, running from one exe.
