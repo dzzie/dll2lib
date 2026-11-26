@@ -40,10 +40,9 @@ one exe (`dumpbin /imports` shows only `ADVAPI32/GDI32/KERNEL32/OLE32/OLEAUT32/U
 ```
   msvbvm60.dll    : NOT loaded -> FUSED     (GetModuleHandle = 0)
   sqlite3_vb6.dll : NOT loaded -> FUSED     (still 0 after every query)
-  SQLite version         : 3.53.0
-  SELECT COUNT(*)        : 2
-  SELECT body WHERE id=2 : 'fused'
-[SUCCESS] A full SQLite engine + the VB6 runtime, running from one exe.
+  SQLite engine version: 3.53.0   (in-memory DB, 8-row dataset)
+  ordered dump / aggregates / GROUP BY / parameterized query / txn rollback: all OK
+[SUCCESS] A full SQLite engine + the VB6 runtime put through its paces from one exe.
 ```
 
 ---

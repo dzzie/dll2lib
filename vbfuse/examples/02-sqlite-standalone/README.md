@@ -5,9 +5,12 @@ fused into a **single exe that depends on nothing but base Windows DLLs** — no
 `sqlite3_vb6.dll`, no `msvbvm60.dll`.
 
 ### Files
-- `SqlApp.vbp` / `modMain.bas` — the app: `Sub Main` opens a `:memory:` DB,
-  creates a table, inserts rows, queries them back, and **prints a report to the
-  console** (built with `--console`).
+- `SqlApp.vbp` / `modMain.bas` — the app. `Sub Main` opens a `:memory:` DB and
+  **puts the engine through its paces**, printing each result to the console
+  (built with `--console`): creates a `langs` table, bulk-inserts a dataset in
+  one transaction, then runs an ordered table dump, aggregates
+  (`COUNT/MIN/MAX/AVG`), a `GROUP BY`, a **parameterized** (`?`-bound) query, and
+  a transaction **rollback** (ACID check).
 - `modSQLite.bas`, `cSQLite.cls`, `cSQLiteAPI.cls`, `cSQLiteResults.cls`,
   `cSQLiteStatement.cls`, `cSQLiteColumn.cls`, `cSQLiteSchema.cls` — the real
   **sqlite4vb** OO class library (45 `Declare`s to `sqlite3_vb6.dll`),
@@ -26,29 +29,55 @@ python build.py --run      build, then run (prints to the console)
 
 ### Expected output
 ```
-====================================================
-  SQLite + VB runtime  -  fully standalone (vbfuse)
-====================================================
-Fused in: sqlite3_vb6.dll (SQLite engine)
-          msvbvm60.dll   (the VB6 runtime, via VBStatic)
-
 Load state at process start (GetModuleHandle):
     msvbvm60.dll    : NOT loaded -> FUSED
     sqlite3_vb6.dll : NOT loaded -> FUSED
   -> neither is an import / load-time dependency.
 
-  SQLite version         : 3.53.0
-  opened                 : :memory:
-  created + inserted     : table t, 2 rows
-  SELECT COUNT(*)        : 2
-  SELECT body WHERE id=2 : 'fused'
+SQLite engine version (from the fused code): 3.53.0
+Opened an in-memory database (:memory:).
 
-Load state after all queries ran:
+Inserted 8 rows in one transaction; last rowid = 8.
+
+[1] SELECT * ORDER BY year
+    name          year   paradigm
+    ------------ -----   --------------
+    C             1972   imperative
+    Haskell       1990   functional
+    Python        1991   multi-paradigm
+    JavaScript    1995   multi-paradigm
+    VB6           1998   event-driven
+    SQLite        2000   embedded-db
+    Go            2009   concurrent
+    Rust          2010   systems
+
+[2] aggregates (COUNT / MIN / MAX / AVG of year)
+    count   = 8
+    oldest  = 1972 (C)
+    newest  = 2010 (Rust)
+    avg year= 1995.6
+
+[3] GROUP BY paradigm
+    multi-paradigm   : 2
+    concurrent       : 1
+    ...
+
+[4] parameterized: SELECT name,year WHERE year >= ?  (bind 2000)
+    SQLite        2000
+    Go            2009
+    Rust          2010
+
+[5] transaction rollback
+    before          : 8 rows
+    inside txn       : 0 rows (InTransaction=True, RowsAffected=8)
+    after rollback   : 8 rows -> restored (ACID OK)
+
+Load state after all that work:
     sqlite3_vb6.dll : NOT loaded -> FUSED
-  -> still 0: the engine never touched the DLL on disk.
+  -> still 0: every query above ran from the fused engine.
 
-[SUCCESS] A full SQLite engine + the VB6 runtime, running
-          from one self-contained exe. Everything is awesome.
+[SUCCESS] A full SQLite engine + the VB6 runtime put through its
+          paces from one self-contained exe. Everything is awesome.
 ```
 
 `Sub Main` calls `GetModuleHandle` **before and after** running the engine — both
