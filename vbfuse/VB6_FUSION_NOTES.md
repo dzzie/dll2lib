@@ -218,3 +218,76 @@ Proven: the real `sqlite4vb` OO-class app fuses SQLite **and** `msvbvm60` into a
 single 2.5 MB exe whose import table is only base Windows DLLs
 (kernel32/user32/gdi32/advapi32/ole32/oleaut32) — it runs the in-memory DB with
 neither `sqlite3_vb6.dll` nor `msvbvm60.dll` present, no source changes.
+
+---
+
+## 8. Fusion-aware guest code (`GetModuleHandle` tricks)
+
+The fused code runs happily unaware that it's fused, but two small, *optional*
+tricks make that fact visible and let loader-shim code adapt.
+
+### Detecting "am I fused?" at runtime
+
+A normal VB6 exe **always** has `msvbvm60.dll` mapped before `Sub Main` runs — it
+imports the runtime. In a `--fuse-runtime` build the runtime is embedded, so the
+module is never mapped. So from inside the program:
+
+```vb
+Private Declare Function GetModuleHandle Lib "kernel32" _
+    Alias "GetModuleHandleA" (ByVal lpModuleName As String) As Long
+
+' 0 == this is a fused / standalone build (runtime is embedded, not a module)
+Function IsFused() As Boolean
+    IsFused = (GetModuleHandle("msvbvm60.dll") = 0)
+End Function
+```
+
+`GetModuleHandle` (not `GetModuleHandleEx`) does **not** take a reference, returns
+0 when the module isn't loaded, and never touches disk — a cheap, side-effect-free
+probe. (`kernel32` `Declare`s are left as ordinary runtime declares; vbfuse only
+externalizes the `--fuse`d DLL's declares, so this keeps working in every build.)
+
+### Fusion-aware `EnsureDLL` — skip the courtesy `LoadLibrary`
+
+Many VB6 DLL wrappers have an `EnsureDLL`-style guard that `LoadLibrary`s the
+target DLL from disk (sqlite4vb's `modSQLite.bas` is one). After fusion the engine
+code is embedded, so that call is unnecessary — but if the DLL file is still
+*present next to the exe*, `LoadLibrary` succeeds and maps a **second, unused**
+copy. Harmless, but it makes `GetModuleHandle("foo.dll")` report "loaded" and
+muddies the "truly standalone" story.
+
+Fix: one guard at the top of `EnsureDLL`, keyed on the runtime being fused:
+
+```vb
+Function EnsureDLL() As Boolean
+    ' Fused build -> the VB runtime is embedded, so the C engine is too.
+    ' Report success without the disk LoadLibrary.
+    If GetModuleHandle("msvbvm60.dll") = 0 Then
+        EnsureDLL = True
+        Exit Function
+    End If
+    ... original LoadLibrary path ...
+End Function
+```
+
+In a **normal (non-fused) build** `msvbvm60` *is* loaded, so the guard is skipped
+and the wrapper behaves exactly as before — the change is invisible unless fused.
+Result: the fused exe never maps `foo.dll`, and `GetModuleHandle("foo.dll")`
+stays 0 before *and* after every call. (This keys off the *runtime* handle, not
+the C DLL's own, so it works even for a C-DLL-only fuse where you'd still want to
+suppress the courtesy load; if you fuse without `--fuse-runtime`, key the guard on
+whatever tells you the C code is embedded instead.)
+
+### Testing fused builds: `--console` + `GetModuleHandle` proof
+
+`vbfuse --console` sets the exe's subsystem to CONSOLE so a `Sub Main` can write
+to stdout (see `README.md`), which makes a fused build self-verifying:
+
+- Print `GetModuleHandle("<fused.dll>")` for each fused DLL — `0` proves it isn't
+  a loaded module (i.e. the code is running from the fused copy).
+- For `--fuse-runtime`, printing `GetModuleHandle("msvbvm60.dll") = 0` is the
+  headline proof: a thing that's impossible for an ordinary VB6 exe.
+- The independent cross-checks: `dumpbin /imports` shows only base Windows DLLs,
+  and the exe runs identically with the original DLL(s) deleted.
+
+Both `examples/` demos do exactly this in their `Sub Main`.

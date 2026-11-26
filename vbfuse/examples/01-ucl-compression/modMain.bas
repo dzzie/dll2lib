@@ -22,6 +22,32 @@ Private Function fmtState(ByVal h As Long) As String
     End If
 End Function
 
+' Classic offset / hex / ascii dump; stops after maxBytes (0 = all).
+Private Sub dumpBytes(b() As Byte, ByVal maxBytes As Long)
+    Dim i As Long, j As Long, n As Long, bv As Long, line As String, asc As String
+    n = UBound(b) + 1
+    i = 0
+    Do While i < n
+        If maxBytes > 0 And i >= maxBytes Then
+            outln "    ...  (" & (n - maxBytes) & " more bytes)"
+            Exit Sub
+        End If
+        line = "    " & Right$("0000" & Hex$(i), 4) & "  "
+        asc = ""
+        For j = 0 To 15
+            If i + j < n Then
+                bv = b(i + j)
+                line = line & Right$("0" & Hex$(bv), 2) & " "
+                If bv >= 32 And bv <= 126 Then asc = asc & Chr$(bv) Else asc = asc & "."
+            Else
+                line = line & "   "
+            End If
+        Next
+        outln line & " " & asc
+        i = i + 16
+    Loop
+End Sub
+
 Sub Main()
     outln "=============================================="
     outln "  UCL compression  -  fused standalone (vbfuse)"
@@ -55,10 +81,21 @@ Sub Main()
     outln "  roundtrip    : " & IIf(ok, "OK - matches the original", "FAILED")
     outln "  ucl_dll.dll  : " & fmtState(GetModuleHandle("ucl_dll.dll"))
     outln ""
+
+    outln "  --- original  (first 48 of " & inlen & " bytes) ---"
+    dumpBytes src, 48
+    outln ""
+    outln "  --- compressed  (all " & clen & " bytes, produced by the fused C code) ---"
+    dumpBytes comp, 0
+    outln ""
+    outln "  --- decompressed  (first 48 of " & dlen & " bytes) ---"
+    dumpBytes dec, 48
+    outln ""
+
     If ok Then
-        outln "[SUCCESS] Real UCL compression ran entirely from fused code -"
-        outln "          and GetModuleHandle proves the DLL isn't even loaded."
-        outln "          Everything is awesome."
+        outln "[SUCCESS] The dense 'compressed' block above round-trips byte-for-byte"
+        outln "          back to the original - and GetModuleHandle proves the DLL"
+        outln "          isn't even loaded. Everything is awesome."
     Else
         outln "[FAIL] roundtrip mismatch"
     End If

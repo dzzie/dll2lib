@@ -21,21 +21,36 @@ python build.py --run      build, then run (prints to the console)
 
 ### Expected output
 ```
-==============================================
-  UCL compression  -  fused standalone (vbfuse)
-==============================================
-ucl_dll.dll (C compression DLL) is FUSED into this exe.
-No ucl_dll.dll is needed at runtime.
-
   input        : 2250 bytes
   compressed   : 64 bytes  (35.2x smaller)
   decompressed : 2250 bytes
   roundtrip    : OK - matches the original
+  ucl_dll.dll  : NOT loaded -> FUSED
 
-[SUCCESS] Real UCL compression ran entirely from fused code.
-          Everything is awesome.
+  --- original  (first 48 of 2250 bytes) ---
+    0000  54 68 65 20 71 75 69 63 6B 20 62 72 6F 77 6E 20  The quick brown
+    0010  66 6F 78 20 6A 75 6D 70 73 20 6F 76 65 72 20 74  fox jumps over t
+    0020  68 65 20 6C 61 7A 79 20 64 6F 67 2E 20 54 68 65  he lazy dog. The
+    ...  (2202 more bytes)
+
+  --- compressed  (all 64 bytes, produced by the fused C code) ---
+    0000  FF 54 68 65 20 71 75 69 63 FF 6B 20 62 72 6F 77  .The quic.k brow
+    0010  6E 20 FF 66 6F 78 20 6A 75 6D 70 FF 73 20 6F 76  n .fox jump.s ov
+    0020  65 72 20 74 77 1E 6C 61 7A FE 79 20 64 6F 67 2E  er tw.laz.y dog.
+    0030  20 CA 2C AA A3 20 51 20 00 00 00 00 00 90 FF 00   .,.. Q ........
+
+  --- decompressed  (first 48 of 2250 bytes) ---
+    0000  54 68 65 20 71 75 69 63 6B 20 62 72 6F 77 6E 20  The quick brown
+    0010  66 6F 78 20 6A 75 6D 70 73 20 6F 76 65 72 20 74  fox jumps over t
+    0020  68 65 20 6C 61 7A 79 20 64 6F 67 2E 20 54 68 65  he lazy dog. The
+    ...  (2202 more bytes)
+
+[SUCCESS] The dense 'compressed' block above round-trips byte-for-byte ...
 ```
-Delete `ucl_dll.dll` first if you like — the fused exe doesn't need it.
+The `compressed` dump is visibly packed binary (UCL's `FF` literal-run markers,
+back-references, length codes); the `decompressed` dump matches the original
+byte-for-byte — all produced by the C code **fused into the exe**. Delete
+`ucl_dll.dll` first if you like; the fused exe doesn't need it.
 
 ### Credits
 - UCL compression library © Markus F.X.J. Oberhumer — https://www.oberhumer.com/opensource/ucl/ (GPL).
