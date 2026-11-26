@@ -8,7 +8,7 @@ __pycache__/
 vbfuse_work/
 full_work/
 *.pdb
-result.txt
+*result.txt
 vb6_make.log
 
 # EXE/DLL/LIB are ignored by default (build artifacts) ...
