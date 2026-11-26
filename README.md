@@ -82,13 +82,41 @@ against `foo.lib` with no reference to `foo.dll`. See [`examples/`](examples/)
 for three runnable walkthroughs (a basic export, a DLL that calls `kernel32`,
 and a real `/MT` C++ DLL with a `DllMain`).
 
-### Scope (v1)
+### Scope & compatibility (v1)
 
-- **In:** PE32 / i386, HIGHLOW relocations, DLL has `.reloc`.
-- **Out / refused:** x64/PE32+, reloc-stripped DLLs (rebuild `/FIXED:NO`),
-  bound imports, TLS directory. Resources (`.rsrc`) are skipped in v1.
-- Merging code sections into one section means the **whole** DLL is carried
-  (no dead-code elimination — that's a separate delinking problem).
+dll2lib does **partial binary delinking**: it recovers enough object/linker
+semantics to relink, without reconstructing the original compilation units.
+
+| PE feature | Status |
+|---|---|
+| PE32 / i386 code, data, bss | **supported** |
+| HIGHLOW base relocations | **supported** (→ COFF `DIR32`) |
+| the DLL's own imports | **supported** (rebuilt as `.idata$*`) |
+| exports (cdecl + stdcall `@n`) | **supported** (`_Name` + `__imp__Name`) |
+| `DllMain` / static-CRT init | **supported** — one-shot, via `_StaticInit` (dll2lib) or a TLS callback (vbfuse) |
+| multiple code sections | **supported** — merged into one `.text` (whole DLL carried; no dead-code elimination) |
+| 16-byte-aligned data (SSE) | **supported** — data sections are 16-aligned |
+| x64 / PE32+ | **refused** |
+| reloc-stripped DLL | **refused** (rebuild `/FIXED:NO`) |
+| bound imports | **refused** |
+| delay-load imports | **refused** (parsed, not yet reconstructed) |
+| own TLS directory (`__declspec(thread)`) | **refused** (can't merge two TLS dirs) |
+| resources (`.rsrc`) | **skipped** — code runs; `LoadString`/icon/own-`HINSTANCE` lookups won't |
+| 32/64-byte-aligned data (AVX/AVX-512) | **untested** |
+
+**Runtime-identity limits (inherent to static fusion).** Fusion swallows a
+module's code and its own imports, but **not its runtime identity**. Fused code's
+`GetModuleHandle(self)` is `0`, it has no own `HINSTANCE`, and `.rsrc` is dropped
+— so a DLL that reads its own resources or introspects its own module won't find
+them. `DllMain` is driven once for `PROCESS_ATTACH`; **thread attach/detach and
+process-detach are not forwarded**, and a `FALSE` init return is not propagated
+as a load failure. CRT init runs under **loader lock** (TLS callback), so a DLL
+whose init does `LoadLibrary`, COM init, or a thread-join can deadlock (SQLite
+and UCL don't). This path fuses DLLs reached **by name** (PE imports / VB6
+`Declare`) — a COM/ActiveX dependency reached via `CreateObject`→CLSID→registry
+is a different problem and out of scope. Finally, SEH/SafeSEH, CFG and
+load-config metadata are not reconstructed; treat a fused build as losing those
+image-level mitigations.
 
 ### Status
 
@@ -102,8 +130,10 @@ Staged, each gated by a link-and-run test (`tests/run_s0.py` … `run_s7_rsrc.py
 - **S5** relocs — data→code / data→data / code→data all converted
 - **S6** bootstrap — `DllMain`/CRT init runs via `_<dll>_StaticInit`
 - **S7** real-world hardening: a `/MT /GS` C++ DLL (CRT + global ctor +
-  `DllMain`, ~1800 relocs) fuses and runs; multi-code-section **merge**; **TLS**
-  cleanly refused; **resources** skipped.
+  `DllMain`, ~1800 relocs) fuses and runs; multi-code-section **merge** (with an
+  interleaved data section resolved to its own section, not the merged span);
+  **TLS**, **bound** and **delay-load** imports cleanly refused; **resources**
+  skipped.
 
 All 11 stage tests green (`tests/run_s0.py` … `run_s7_rsrc.py`).
 

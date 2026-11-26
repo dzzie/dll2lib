@@ -39,10 +39,14 @@ SCN_MEM_READ = 0x40000000
 SCN_MEM_WRITE = 0x80000000
 
 # common combinations
+# 16-byte alignment on data sections preserves SSE-aligned constants/structs
+# whose intra-section offset was 16-aligned in the original image; over-aligning
+# is always safe (costs at most a few padding bytes). AVX-512 (64B) data is not
+# guaranteed -- see the compatibility notes.
 FLAGS_TEXT = SCN_CNT_CODE | SCN_ALIGN_16 | SCN_MEM_EXECUTE | SCN_MEM_READ
-FLAGS_DATA = SCN_CNT_INITIALIZED_DATA | SCN_ALIGN_4 | SCN_MEM_READ | SCN_MEM_WRITE
-FLAGS_RDATA = SCN_CNT_INITIALIZED_DATA | SCN_ALIGN_4 | SCN_MEM_READ
-FLAGS_BSS = SCN_CNT_UNINITIALIZED_DATA | SCN_ALIGN_4 | SCN_MEM_READ | SCN_MEM_WRITE
+FLAGS_DATA = SCN_CNT_INITIALIZED_DATA | SCN_ALIGN_16 | SCN_MEM_READ | SCN_MEM_WRITE
+FLAGS_RDATA = SCN_CNT_INITIALIZED_DATA | SCN_ALIGN_16 | SCN_MEM_READ
+FLAGS_BSS = SCN_CNT_UNINITIALIZED_DATA | SCN_ALIGN_16 | SCN_MEM_READ | SCN_MEM_WRITE
 
 # IMAGE_SYM_CLASS_*
 SYM_CLASS_EXTERNAL = 2

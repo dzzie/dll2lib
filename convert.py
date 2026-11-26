@@ -161,6 +161,7 @@ def convert(pe: PE32, stdcall_args: dict[str, int] | None = None,
     # displacements. Layout mirrors the original (slot = va - cbase), gaps
     # zero-filled; this is why dead-code elimination is impossible.
     merged_code = len(code_secs) >= 2
+    merged_region = None
     if merged_code:
         cbase = min(ps.virtual_address for ps in code_secs)
         cend = max(ps.virtual_address + max(ps.virtual_size, ps.size_of_raw_data)
@@ -172,7 +173,12 @@ def convert(pe: PE32, stdcall_args: dict[str, int] | None = None,
             o = ps.virtual_address - cbase
             buf[o:o + len(d)] = d
         merged.append(bytes(buf))
-        regions.append((cbase, cend, merged, cbase))
+        # The merged span covers [cbase, cend) INCLUDING any gaps, which can
+        # overlap a non-code section that sits between two code sections by RVA.
+        # So it must be the LOWEST-priority region in find(): the real per-section
+        # regions are appended first and win; the merged span only catches RVAs
+        # (actual code, or zero-filled gaps) that no specific section claims.
+        merged_region = (cbase, cend, merged, cbase)
 
     for ps in kept:
         if merged_code and ps.is_code:
@@ -185,6 +191,9 @@ def convert(pe: PE32, stdcall_args: dict[str, int] | None = None,
             cs.append(mapped(ps))
         end = ps.virtual_address + max(ps.virtual_size, ps.size_of_raw_data)
         regions.append((ps.virtual_address, end, cs, ps.virtual_address))
+
+    if merged_region is not None:
+        regions.append(merged_region)          # catch-all, checked last
 
     lowest_va = min((st for st, _, _, _ in regions), default=0)
 

@@ -415,6 +415,11 @@ class PE32:
             self.refuse_reasons.append(f"non-HIGHLOW base relocs present ({names}) -- v1 is HIGHLOW only")
         if self.has_tls:
             self.refuse_reasons.append("image has a TLS directory -- v1 refuses (can't merge two TLS dirs)")
+        if self.delay_imports:
+            names = ", ".join(d.name for d in self.delay_imports)
+            self.refuse_reasons.append(
+                f"delay-load imports present ({names}) -- v1 parses but does not "
+                f"reconstruct them; refusing rather than emit a silently broken lib")
 
     # ---------- convenience ----------
     @property
