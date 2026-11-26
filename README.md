@@ -104,19 +104,10 @@ semantics to relink, without reconstructing the original compilation units.
 | resources (`.rsrc`) | **skipped** — code runs; `LoadString`/icon/own-`HINSTANCE` lookups won't |
 | 32/64-byte-aligned data (AVX/AVX-512) | **untested** |
 
-**Runtime-identity limits (inherent to static fusion).** Fusion swallows a
-module's code and its own imports, but **not its runtime identity**. Fused code's
-`GetModuleHandle(self)` is `0`, it has no own `HINSTANCE`, and `.rsrc` is dropped
-— so a DLL that reads its own resources or introspects its own module won't find
-them. `DllMain` is driven once for `PROCESS_ATTACH`; **thread attach/detach and
-process-detach are not forwarded**, and a `FALSE` init return is not propagated
-as a load failure. CRT init runs under **loader lock** (TLS callback), so a DLL
-whose init does `LoadLibrary`, COM init, or a thread-join can deadlock (SQLite
-and UCL don't). This path fuses DLLs reached **by name** (PE imports / VB6
-`Declare`) — a COM/ActiveX dependency reached via `CreateObject`→CLSID→registry
-is a different problem and out of scope. Finally, SEH/SafeSEH, CFG and
-load-config metadata are not reconstructed; treat a fused build as losing those
-image-level mitigations.
+Beyond what's refused above, static fusion has inherent limits (module identity,
+resources, loader-lock, COM, mitigations). They're collected in
+**[Limitations](#limitations)** below — worth a read before pointing it at
+something new.
 
 ### Status
 
@@ -172,6 +163,58 @@ vbfuse app.vbp --fuse foo.dll [--fuse bar.dll ...]
 See [`vbfuse/README.md`](vbfuse/README.md), the full knowledge dump in
 [`vbfuse/VB6_FUSION_NOTES.md`](vbfuse/VB6_FUSION_NOTES.md), and the runnable
 demos in [`vbfuse/examples/`](vbfuse/examples/).
+
+---
+
+## Limitations
+
+Read this before pointing it at something new — none of these are bugs, they're
+the shape of what static fusion can and can't do.
+
+**Refused outright** — dll2lib stops with a reason rather than emit a broken lib.
+x64 / PE32+ images; reloc-stripped DLLs (rebuild `/FIXED:NO`); DLLs with **bound**
+imports; DLLs with **delay-load** imports (parsed, not yet reconstructed); and
+DLLs with their own **TLS directory** (`__declspec(thread)` or TLS callbacks —
+two TLS dirs can't be merged). Check any DLL first with `dll2lib foo.dll /DUMP`.
+
+**Lost runtime identity.** Fused code has no module of its own, so:
+- `GetModuleHandle("foo.dll")` returns `0`, and there is no own `HINSTANCE`;
+- `.rsrc` is dropped — `LoadString`, icons, message tables, version info, and any
+  "load my own resource" call find nothing;
+- a DLL that locates its own path/handle to open sidecar files will misbehave.
+
+  (VBStatic special-cases this for `msvbvm60`; the generic engine does not.)
+
+**`DllMain` lifecycle is partial.** `DLL_PROCESS_ATTACH` is driven once (CRT +
+global ctors run); **thread-attach, thread-detach and process-detach are not
+forwarded**, and a `FALSE` return from init is **not** propagated as a load
+failure. Fine for compute libraries; a library with real per-thread setup or
+shutdown work needs care.
+
+**Init runs under loader lock.** The CRT-init TLS callback (and `DllMain`) run
+while the loader lock is held, so a DLL whose init calls `LoadLibrary`, does COM
+init, or joins a thread can **deadlock**. SQLite and UCL don't — it's the ceiling
+of what's safely fuseable.
+
+**Name-reached dependencies only.** Fusion covers code reached through the PE
+import table or a VB6 `Declare "foo.dll"`. A **COM / ActiveX** dependency reached
+via `CreateObject` → CLSID → registry is a different problem, out of scope.
+
+**No dead-code elimination.** Multi-code-section DLLs are merged whole — the
+entire DLL is carried, unused functions included. Trimming them is a separate
+delinking problem.
+
+**Image mitigations not reconstructed.** SEH/SafeSEH, CFG and load-config
+metadata don't survive fusion — treat a fused build as losing them.
+
+**Data alignment.** Data sections are 16-byte aligned (covers SSE); 32/64-byte
+(AVX / AVX-512) aligned data is **untested**.
+
+**vbfuse specifics.** x86 (32-bit) only; needs **VB6 (VB98)** and the **x86 MS
+Build Tools** installed — it drives the real `VB6.EXE` and `LINK.EXE`. It works
+from a *normally compiled* project with **no source edits**, but each fused DLL
+must be dll2lib-convertible (see "Refused outright"). `--fuse-runtime` embeds
+`msvbvm60` via VBStatic.
 
 ---
 
