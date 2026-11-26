@@ -97,6 +97,32 @@ Peterson's classic `MConsole.bas`.)
 See **`VB6_FUSION_NOTES.md`** for the full VB6 build model, the Declare-thunk
 format, the debugger capture, the `/OPT:NOREF` rule, and the TLS-callback CRT-init.
 
+## Limitations
+
+vbfuse inherits **every** dll2lib limitation (see the top-level
+[README → Limitations](../README.md#limitations)) and adds a few of its own:
+
+- **x86 (32-bit) only, and toolchain-dependent.** It drives the real `VB6.EXE`
+  (VB98) and VB6's own `LINK.EXE`, so both **VB6** and the **x86 MS Build Tools**
+  must be installed. It's a Windows-only, on-your-machine build step.
+- **Each fused C DLL must be dll2lib-convertible** — no x64, no bound or
+  delay-load imports, no own TLS directory; `.rsrc` is dropped; CRT init runs
+  under loader lock. Check first with `dll2lib foo.dll /DUMP`.
+- **Only `Declare`-reached DLLs are fused.** vbfuse targets DLLs called via
+  `Declare Lib "foo.dll"`. A dependency reached another way is **not** fused: a
+  C DLL that itself `LoadLibrary`s a second DLL, or a COM/ActiveX object made
+  with `CreateObject` (CLSID → registry), is out of scope.
+- **"No source edits" — one practical caveat.** Your `Declare`s are untouched,
+  but to *see* output from a headless build you add a small `Sub Main` + a
+  console-print helper (above). That's test scaffolding, not a fusion requirement.
+- **`--fuse-runtime` relies on VBStatic.** Fusing `msvbvm60` is done by
+  LinkAlchemy's VBStatic (bundled `VBStatic.exe`); its constraints apply —
+  Standard-EXE `Sub Main` projects work; form/OCX-heavy projects are less tested.
+- **Runtime-identity / loader-lock caveats carry into the VB exe.** The fused C
+  DLL still must not `LoadLibrary`/COM-init/thread-join during its own init, and
+  still can't read its own `.rsrc`. Loader-aware guest code can detect the fused
+  case with `GetModuleHandle("msvbvm60.dll") = 0` — see `VB6_FUSION_NOTES.md` §8.
+
 ### Tools
 `vbcapture.py` (debugger capture) · `vbobj_extern.py` (thunk→extern) ·
 `tlsinit.py` (TLS CRT-init object) · `vbfuse.py` (the one command) ·
