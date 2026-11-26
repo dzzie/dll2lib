@@ -17,7 +17,10 @@ into a standalone exe that needs no `ucl_dll.dll` at runtime.
 python build.py            (or:  build.cmd)
 python build.py --run      build, then run (prints to the console)
 ```
-`build.py` invokes `vbfuse UclTest.vbp --fuse ucl_dll.dll --console`.
+`build.py` invokes `vbfuse UclTest.vbp --fuse ucl_dll.dll --console --export-fused`.
+`--export-fused` means the fused functions show up in the exe's own export table,
+so `dumpbin /exports ucltest_fused.exe` lists `Compress`, `DeCompress`, … at
+their fused RVAs — handy for poking at the result.
 
 ### Expected output
 ```

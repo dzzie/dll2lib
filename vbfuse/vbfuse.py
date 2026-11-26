@@ -32,7 +32,9 @@ from tlsinit import emit_tls_init                  # noqa: E402
 from pe32 import PE32                              # noqa: E402
 from convert import convert, ConvertError          # noqa: E402
 from msvc import vcrun                             # noqa: E402
+import fzmeta                                      # noqa: E402
 
+VBFUSE_VERSION = "1.0"
 VB98 = os.path.dirname(vbcapture.VB6_EXE)
 LINK_EXE = os.path.join(VB98, "LINK.EXE")
 
@@ -131,12 +133,16 @@ def main(argv):
     #    callback can run its CRT/DllMain init (no bootstrap -> no __ImageBase).
     print("[3/4] converting DLL(s) -> static lib(s)")
     libs = []
+    fused_objs = []
     entry_syms = []
+    export_names = []
     for d in a.fuse:
         pe = PE32.from_file(d)
         if pe.refuse_reasons:
             print(f"      {os.path.basename(d)} not convertible: {pe.refuse_reasons}",
                   file=sys.stderr); return 1
+        export_names += [e.name for e in pe.exports
+                         if e.name and e.forwarder is None and e.rva != 0]
         stem = os.path.splitext(os.path.basename(d))[0]
         esym = f"_{stem}_fzentry" if pe.address_of_entry_point else None
         try:
@@ -150,6 +156,7 @@ def main(argv):
             print(f"      lib.exe failed for {stem}:\n{r.stdout}{r.stderr}", file=sys.stderr)
             return 1
         libs.append(stem + ".lib")
+        fused_objs.append(stem + ".obj")
         if esym:
             entry_syms.append(esym)
         print(f"      {os.path.basename(d)} -> {stem}.lib"
@@ -211,12 +218,51 @@ def main(argv):
     if tls_obj:
         args.append(tls_obj)
         args.append("/INCLUDE:__tls_used")       # force the linker to wire the TLS dir
-    args += [os.path.join(work, lib) for lib in libs]
+    # Link the fused .obj DIRECTLY (always fully included) rather than the on-demand
+    # .lib -- otherwise LINK's export pre-pass can't resolve the exported symbols
+    # from a static lib (LNK2001 'build of exports file'), and unused exports would
+    # never be pulled in at all.
+    fused_inputs = fused_objs if export_names else libs
+    args += [os.path.join(work, x) for x in fused_inputs]
+
+    # re-emit every fused export in the exe's own export table (name -> fused RVA)
+    if export_names:
+        seen, lines = set(), ["EXPORTS"]
+        for nm in export_names:
+            if nm not in seen:
+                seen.add(nm)
+                lines.append(f"    {nm}")            # LINK maps `Name` -> dll2lib's `_Name`
+        def_path = os.path.join(work, "fzexports.def")
+        with open(def_path, "w") as f:
+            f.write("\n".join(lines) + "\n")
+        args.append("/DEF:" + def_path)
+        print(f"      exporting {len(seen)} fused symbol(s) into the exe (analysis aid)")
+
+    # build-info record: aes("vbFuse<ver> | <user>@<host> | <when> | <exepath>")
+    import getpass
+    import platform
+    from datetime import datetime
+    _user = os.environ.get("USERNAME") or getpass.getuser() or "?"
+    _host = os.environ.get("COMPUTERNAME") or platform.node() or "?"
+    _when = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    _blob = fzmeta.make_blob(VBFUSE_VERSION, _user, _host, _when, fused)
+    _mark_obj = os.path.join(work, "fzmark.obj")
+    fzmeta.emit_obj(_blob, _mark_obj)
+    args.append(_mark_obj)
+    args.append("/INCLUDE:" + fzmeta.SYMBOL)
+    print(f"      build stamp embedded (AES-128, {len(_blob)} bytes)")
 
     env = dict(os.environ); env["PATH"] = VB98 + ";" + env["PATH"]
     r = subprocess.run(args, cwd=work, env=env, capture_output=True, text=True)
     if r.returncode != 0 or not os.path.isfile(fused):
         print(f"LINK failed:\n{r.stdout}{r.stderr}", file=sys.stderr); return 1
+    if export_names:                              # drop LINK's exe-side .exp/.lib
+        stem = os.path.splitext(fused)[0]
+        for ext in (".exp", ".lib"):
+            try:
+                os.remove(stem + ext)
+            except OSError:
+                pass
     print(f"\nFUSED -> {fused}  ({os.path.getsize(fused)} bytes)")
     print(f"       no runtime dependency on: {', '.join(markers)}")
 

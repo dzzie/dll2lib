@@ -25,7 +25,10 @@ python build.py            (or:  build.cmd)
 python build.py --run      build, then run (prints to the console)
 ```
 `build.py` invokes
-`vbfuse SqlApp.vbp --fuse sqlite3_vb6.dll --fuse-runtime …\msvbvm60.dll --vbstatic VBStatic.exe --console`.
+`vbfuse SqlApp.vbp --fuse sqlite3_vb6.dll --fuse-runtime …\msvbvm60.dll --vbstatic VBStatic.exe --console --export-fused`.
+With `--export-fused`, `dumpbin /exports sqlapp_fused.exe` lists all 45 fused
+`vb6_sqlite3_*` functions at their RVAs — the fused SQLite engine is labelled in
+the exe's own export table, even though the exe still imports only base Windows DLLs.
 
 ### Expected output
 ```

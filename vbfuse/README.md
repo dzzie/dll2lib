@@ -75,6 +75,26 @@ vbfuse <project.vbp> --fuse foo.dll [--fuse bar.dll ...]
        [--console] [--out fused.exe] [--run [-- <args>]]
 ```
 
+### Naming the fused code
+
+Once a DLL is fused, its functions are just anonymous bytes in the exe. vbfuse
+re-emits every fused export in the exe's own export table (export name → fused
+RVA), so `dumpbin /exports` / IDA can name them:
+
+```
+> dumpbin /exports ucltest_fused.exe
+      1    0 00003295 Compress
+      2    1 000032FA DeCompress
+      3    2 00003251 Init
+      ...
+```
+
+No runtime effect — it only adds a read-only export directory. Two VC6-`LINK`
+quirks make it work: the export must be a **plain** name so the linker runs its
+own decoration search onto dll2lib's `_Name`, and the fused object is linked
+**directly** rather than as a `.lib` so even *unused* exports are present when the
+export table is built.
+
 ### Testing with `--console`
 
 `--console` builds the fused exe with the **CONSOLE** subsystem, so a VB app can
@@ -125,8 +145,8 @@ vbfuse inherits **every** dll2lib limitation (see the top-level
 
 ### Tools
 `vbcapture.py` (debugger capture) · `vbobj_extern.py` (thunk→extern) ·
-`tlsinit.py` (TLS CRT-init object) · `vbfuse.py` (the one command) ·
-`trace_build.py` (original investigation probe)
+`tlsinit.py` (TLS CRT-init object) · `fzmeta.py` (build-info record) ·
+`vbfuse.py` (the one command) · `trace_build.py` (original investigation probe)
 
 The UCL sample itself (third-party GPL binaries) lives outside this repo under
 `vbleg/`; these tools take paths as arguments.

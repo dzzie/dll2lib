@@ -291,3 +291,21 @@ to stdout (see `README.md`), which makes a fused build self-verifying:
   and the exe runs identically with the original DLL(s) deleted.
 
 Both `examples/` demos do exactly this in their `Sub Main`.
+
+### Naming the fused code in the export table
+
+vbfuse re-emits every fused export in the exe's own export table (export name →
+fused RVA) so `dumpbin /exports` / IDA can name the functions. It only adds a
+read-only export directory — no runtime effect, imports unchanged.
+
+Two VC6-`LINK` gotchas were needed to make exporting-from-fused-code work; both
+cost a round of `LNK2001 ... during build of exports file` before they were found:
+
+1. **Export by plain name, not `Name=_Name`.** dll2lib's symbol is `_Name`, but a
+   `.def` line `Name=_Name` makes LINK's export pre-pass fail to resolve it. A bare
+   `Name` lets LINK run its own decoration search (`Name` → `_Name`) and it binds.
+2. **Link the fused `.obj` directly, not the `.lib`.** LINK's export pre-pass does
+   not pull members from a static lib, and an *unused* export (one no `Declare`
+   references) is never pulled at all — so it's reported unresolved. Feeding the
+   dll2lib object file directly (always fully included) makes every export, used
+   or not, present when the export table is built.

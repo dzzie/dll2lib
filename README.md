@@ -159,6 +159,9 @@ vbfuse app.vbp --fuse foo.dll [--fuse bar.dll ...]
 
 - `--console` builds the exe with the CONSOLE subsystem, so a VB
   `ConsolePrint`-style `Sub` can write to stdout — handy for testing.
+- The fused DLL's exports are re-emitted in the exe's own export table
+  (name → fused RVA). No runtime effect; it's an analysis aid so
+  `dumpbin /exports` / IDA can name the fused functions.
 
 See [`vbfuse/README.md`](vbfuse/README.md), the full knowledge dump in
 [`vbfuse/VB6_FUSION_NOTES.md`](vbfuse/VB6_FUSION_NOTES.md), and the runnable
