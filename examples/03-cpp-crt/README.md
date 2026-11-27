@@ -5,7 +5,7 @@ This is what a DLL you'd actually ship looks like, and it shows why the
 **`StaticInit` bootstrap** exists.
 
 ### Files
-- `widget.cpp` — a global ctor sets `g_value = 40`; `DllMain` adds `2` on
+- `widget.cpp` — the DLL source (compiled into **`widgetlib.dll`**): a global ctor sets `g_value = 40`; `DllMain` adds `2` on
   attach; `GetWidget()` returns `g_value`.
 - `widget.def` / `widget.dll2lib.def` — export + stdcall decoration.
 - `caller.c` — prints `GetWidget()` **before and after** calling

@@ -4,7 +4,7 @@ The simplest case: a DLL with a single `__stdcall` export that reads a global,
 fused into an executable.
 
 ### Files
-- `hello.c` — the DLL: `AddNumbers(a, b)` returns `a + b + g_bias` (`g_bias`
+- `hello.c` — the DLL source (compiled into **`hellolib.dll`**): `AddNumbers(a, b)` returns `a + b + g_bias` (`g_bias`
   is a global, so the DLL has a real base relocation to convert).
 - `hello.def` — exports `AddNumbers` (used to build the DLL).
 - `hello.dll2lib.def` — tells dll2lib the stdcall decoration (`_AddNumbers@8`).
@@ -16,10 +16,10 @@ build.cmd
 ```
 
 ### What it demonstrates
-- `dll2lib hello.dll /OUT:hello.lib /DEF:hello.dll2lib.def` turns the DLL into a
+- `dll2lib hellolib.dll /OUT:hellolib.lib /DEF:hello.dll2lib.def` turns the DLL into a
   static library.
-- The caller links `hello.lib` and calls the export.
-- `hello.dll` is **deleted** before running — the program still prints
+- The caller links `hellolib.lib` and calls the export.
+- `hellolib.dll` is **deleted** before running — the program still prints
   `AddNumbers(20, 22) = 142`, proving the code was fused in (the `+ 100`
   confirms the `g_bias` relocation was converted correctly).
 
