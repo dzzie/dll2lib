@@ -41,7 +41,10 @@ LINK_EXE = os.path.join(VB98, "LINK.EXE")
 
 def find_vbstatic():
     import glob
-    here_up = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))  # .../fuser
+    bundled = os.path.join(ROOT, "tools", "VBStatic.exe")   # the canonical copy
+    if os.path.isfile(bundled):
+        return bundled
+    here_up = os.path.dirname(ROOT)                          # .../fuser
     for pat in (os.path.join(here_up, "VB6-LinkAlchemy*", "vbstatic", "VBStatic.exe"),
                 os.path.join(os.path.expanduser("~"), "Desktop", "**", "VBStatic.exe")):
         hits = glob.glob(pat, recursive=True)

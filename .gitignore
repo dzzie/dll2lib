@@ -20,7 +20,8 @@ vb6_make.log
 #     ship so the demos build without fuss and the results can be analyzed.
 !vbfuse/examples/**/*.dll
 !vbfuse/examples/**/*.exe
-!vbfuse/examples/**/VBStatic.exe
+# bundled third-party build tool (VB6-LinkAlchemy's VBStatic, MIT)
+!tools/VBStatic.exe
 
 # local-only tooling (kept in-tree for convenience, never committed)
 /private/

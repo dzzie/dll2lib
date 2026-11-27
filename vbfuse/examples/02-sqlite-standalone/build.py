@@ -22,9 +22,9 @@ MSVBVM = r"C:\Windows\SysWOW64\msvbvm60.dll"
 
 cmd = [sys.executable, VBFUSE, os.path.join(HERE, "SqlApp.vbp"),
        "--fuse", os.path.join(HERE, "sqlite3_vb6.dll"),
-       "--fuse-runtime", MSVBVM,
-       "--vbstatic", os.path.join(HERE, "VBStatic.exe"), "--console",
+       "--fuse-runtime", MSVBVM, "--console",
        "--out", os.path.join(HERE, "sqlapp_fused.exe")]
+# VBStatic.exe is auto-located in ../../../tools/; pass --vbstatic <path> to override.
 if "--run" in sys.argv:
     cmd += ["--run"]          # console-subsystem exe: output goes to the console
 raise SystemExit(subprocess.call(cmd))

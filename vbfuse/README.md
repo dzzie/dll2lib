@@ -125,9 +125,9 @@ defines `_VBStaticEntry`, then vbfuse relinks. We ported the *Declare‑thunk
 rewrite* to Python (`vbobj_extern.py`), but the runtime‑fusion itself is his tool
 — credited, not rewritten.
 
-So **`--fuse-runtime` requires `VBStatic.exe` on disk** (bundled under
-`examples/`; pass `--vbstatic <path>`, or `find_vbstatic()` locates it). Plain
-C‑DLL fusion needs none of this.
+So **`--fuse-runtime` requires `VBStatic.exe` on disk** (bundled at the repo's
+`tools/VBStatic.exe`; `find_vbstatic()` locates it automatically, or pass
+`--vbstatic <path>`). Plain C‑DLL fusion needs none of this.
 
 Because VBStatic (and the relink) operate on the captured OBJs, timing matters:
 VB6 deletes the OBJs the instant its own link finishes, so `vbcapture` grabs them
@@ -157,7 +157,7 @@ vbfuse inherits **every** dll2lib limitation (see the top-level
   but to *see* output from a headless build you add a small `Sub Main` + a
   console-print helper (above). That's test scaffolding, not a fusion requirement.
 - **`--fuse-runtime` relies on VBStatic.** Fusing `msvbvm60` is done by
-  LinkAlchemy's VBStatic (bundled `VBStatic.exe`); its constraints apply —
+  LinkAlchemy's VBStatic (bundled at `tools/VBStatic.exe`); its constraints apply —
   Standard-EXE `Sub Main` projects work; form/OCX-heavy projects are less tested.
 - **Runtime-identity / loader-lock caveats carry into the VB exe.** The fused C
   DLL still must not `LoadLibrary`/COM-init/thread-join during its own init, and

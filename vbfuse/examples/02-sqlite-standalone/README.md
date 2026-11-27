@@ -16,8 +16,10 @@ fused into a **single exe that depends on nothing but base Windows DLLs** — no
   **sqlite4vb** OO class library (45 `Declare`s to `sqlite3_vb6.dll`),
   **unmodified**.
 - `sqlite3_vb6.dll` — the SQLite engine (static‑CRT build) to fuse.
-- `VBStatic.exe` — fuses the VB6 runtime (from VB6‑LinkAlchemy; MIT, see below).
 - `sqlapp_fused.exe` — the prebuilt fully‑standalone result (checked in).
+
+  (The VB6‑runtime fuser, `VBStatic.exe`, lives at the repo's `tools/` and is
+  located automatically — from VB6‑LinkAlchemy; MIT, see below.)
 
 ### Build
 ```
@@ -25,7 +27,8 @@ python build.py            (or:  build.cmd)
 python build.py --run      build, then run (prints to the console)
 ```
 `build.py` invokes
-`vbfuse SqlApp.vbp --fuse sqlite3_vb6.dll --fuse-runtime …\msvbvm60.dll --vbstatic VBStatic.exe --console --export-fused`.
+`vbfuse SqlApp.vbp --fuse sqlite3_vb6.dll --fuse-runtime …\msvbvm60.dll --console`
+(`VBStatic.exe` is auto‑located in `tools/`).
 With `--export-fused`, `dumpbin /exports sqlapp_fused.exe` lists all 45 fused
 `vb6_sqlite3_*` functions at their RVAs — the fused SQLite engine is labelled in
 the exe's own export table, even though the exe still imports only base Windows DLLs.
@@ -108,7 +111,7 @@ exactly as before.
 
 ### Credits
 - **VB6‑LinkAlchemy** / **VBStatic** by **UltraAlex0** — fuses `MSVBVM60.DLL`
-  into the exe. `VBStatic.exe` here is built from that project (MIT).
+  into the exe. `VBStatic.exe` (in the repo's `tools/`) is built from that project (MIT).
   - https://github.com/ultraalex00/VB6-LinkAlchemy
   - https://www.vbforums.com/showthread.php?912383-VB6-LinkAlchemy-Embedding-MSVBVM60-DLL-into-EXE-DLL
 - **sqlite4vb** VB6 classes © David Zimmer / sandsprite.com (MIT).

@@ -238,6 +238,7 @@ Python dependencies — the PE reader and COFF writer are hand-rolled.
 | `dll2lib.py` | the dll2lib CLI |
 | `tests/run_s*.py` | staged build-and-run tests (S0–S7), each self-checking |
 | `vbfuse/` | the VB6 fusion front end (`vbfuse.py`, `vbcapture.py`, `vbobj_extern.py`, `tlsinit.py`) |
+| `tools/` | bundled third-party build tool (`VBStatic.exe`, for `--fuse-runtime`) |
 | `vbfuse/examples/` | two runnable demos + their prebuilt fused exes |
 
 ## Credits & acknowledgements
