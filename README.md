@@ -241,9 +241,12 @@ section (baking its relocations for the exe's fixed base — VB6 exes are
 reloc-stripped), merges the DLL's imports into the exe's import table, rewrites
 the thunks to `jmp` into the stuffed code, and injects a TLS callback for CRT
 init. Validated on UCL (dynamic CRT) and SQLite (`sqlite3_vb6.dll`, 1 MB **static
-CRT**, full sqlite4vb class stack) — both run standalone with the DLL deleted.
-It's a self-contained subproject (own forked `pe32.py`); see
-[`exestuff/README.md`](exestuff/README.md) and `exestuff/notes.md`.
+CRT**, full sqlite4vb class stack) — both run standalone with the DLL deleted —
+and on a real **ActiveX DLL**: `sqlite3_vb6.dll` stuffed into `sqlite4vb.dll`
+(relocatable, so the target's `.reloc` is expanded), registered and driven over
+COM with the C DLL removed (`exestuff/tests/corpus_activex/`, source + prebuilt
+stuffed DLL included). It's a self-contained subproject (own forked `pe32.py`);
+see [`exestuff/README.md`](exestuff/README.md) and `exestuff/notes.md`.
 
 ---
 
