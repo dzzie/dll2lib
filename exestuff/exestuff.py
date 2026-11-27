@@ -107,13 +107,14 @@ def stuff(exe_path, dll_path, out_path, do_tls=True, do_console=False):
     P1 = exe.next_rva()                       # the blob will land here
     SHIFT = P1 - start                        # exe_rva(dll_rva) = dll_rva + SHIFT
     delta = exe_base - dll.image_base + SHIFT  # add to every HIGHLOW absolute
-    nrel = 0
+    stuffed_reloc_rvas = []                     # new RVAs holding baked absolutes
     for r in dll.relocs:
         off = r.rva - start
         if 0 <= off <= len(blob) - 4:
             struct.pack_into("<I", blob, off, (u32(blob, off) + delta) & 0xFFFFFFFF)
-            nrel += 1
-    print(f"[S3] blob {len(blob)} bytes @ rva 0x{P1:X}; baked {nrel} relocs (delta=0x{delta & 0xFFFFFFFF:X})")
+            stuffed_reloc_rvas.append(r.rva + SHIFT)
+    print(f"[S3] blob {len(blob)} bytes @ rva 0x{P1:X}; baked {len(stuffed_reloc_rvas)} relocs "
+          f"(delta=0x{delta & 0xFFFFFFFF:X})")
 
     # fix the DLL's ILT entries (named-import RVAs) by SHIFT, in the blob
     imp_dir_rva = dll.data_directories[1].rva
@@ -167,9 +168,19 @@ def stuff(exe_path, dll_path, out_path, do_tls=True, do_console=False):
     print(f"[S6] rewrote {len(thunks)} thunks -> jmp into .stuff")
 
     # --- S7: inject a TLS callback that runs the DLL's entry (CRT/DllMain) ---
+    tls_va_rvas = []
     if do_tls and dll.address_of_entry_point:
-        inject_tls(exe, dll.address_of_entry_point + SHIFT)
+        tls_va_rvas = inject_tls(exe, dll.address_of_entry_point + SHIFT)
         print("[S7] TLS callback -> DLL entry (CRT init)")
+
+    # --- reloc merge: if the target is relocatable (ActiveX DLL/exe has a
+    #     .reloc), the baked absolutes (stuffed code + TLS VA fields) must move
+    #     under ASLR -- add their HIGHLOW entries to the target's base-reloc
+    #     table. (A reloc-stripped VB6 exe is fixed-base: nothing to do.)
+    if exe.get_datadir(5)[1]:
+        rvas = stuffed_reloc_rvas + tls_va_rvas
+        expand_relocs(exe, rvas)
+        print(f"[reloc] target is relocatable -> expanded .reloc with {len(rvas)} entries")
 
     if do_console:
         exe.set_subsystem(3)                  # CONSOLE: a ConsolePrint Sub reaches stdout
@@ -184,20 +195,22 @@ def inject_tls(exe: PEImage, entry_rva: int):
     (hinst, reason, reserved) to entry_rva on DLL_PROCESS_ATTACH."""
     base = exe.image_base
     P = exe.next_rva()
-    # stub (offsets):
+    # Forward ALL reasons (ATTACH/THREAD_*/DETACH) to DllMainCRTStartup, exactly
+    # like a real DLL entry. DETACH matters: that's when the CRT does FlsFree to
+    # unregister its FLS callback -- skip it and ntdll calls the dangling callback
+    # into the (by-then unmapped) stuffed region at process teardown -> crash.
     #   0: 55            push ebp
     #   1: 8B EC         mov ebp,esp
-    #   3: 83 7D 0C 01   cmp dword [ebp+0C],1   ; reason == DLL_PROCESS_ATTACH
-    #   7: 75 0E         jne done (-> offset 23)
-    #   9: FF 75 10      push [ebp+10]          ; reserved
-    #   C: FF 75 0C      push [ebp+0C]          ; reason
-    #   F: FF 75 08      push [ebp+08]          ; hinst
-    #  12: E8 <rel32>    call entry             ; (operand at 13, ends at 18)
-    #  17: 90            nop  (pad so done is at 18? no -- see below)
-    stub = bytearray(b"\x55\x8B\xEC\x83\x7D\x0C\x01\x75\x0E"
+    #   3: FF 75 10      push [ebp+10]          ; reserved
+    #   6: FF 75 0C      push [ebp+0C]          ; reason
+    #   9: FF 75 08      push [ebp+08]          ; hinst
+    #   C: E8 <rel32>    call entry             ; operand at D, ends at 11
+    #  11: 5D            pop ebp
+    #  12: C2 0C 00      ret 0C
+    stub = bytearray(b"\x55\x8B\xEC"
                      b"\xFF\x75\x10\xFF\x75\x0C\xFF\x75\x08\xE8\x00\x00\x00\x00"
-                     b"\x5D\xC2\x0C\x00")        # 23: pop ebp ; 24: ret 0C
-    call_site = 18                               # offset of E8
+                     b"\x5D\xC2\x0C\x00")
+    call_site = 12                               # offset of E8
     idx_off = _align4 = (len(stub) + 3) & ~3     # 4-align the data that follows
     tmpl_off = idx_off + 4
     cbarr_off = tmpl_off + 4
@@ -218,6 +231,32 @@ def inject_tls(exe: PEImage, entry_rva: int):
                           pewrite.SCN_CNT_INITIALIZED_DATA | pewrite.SCN_MEM_EXECUTE |
                           pewrite.SCN_MEM_READ | pewrite.SCN_MEM_WRITE)
     exe.set_datadir(9, rva + dir_off, 24)   # IMAGE_DIRECTORY_ENTRY_TLS
+    # the absolute VA fields (for a relocatable target, these need base relocs)
+    return [rva + cbarr_off,                # callback array[0] = &stub
+            rva + dir_off + 0,              # StartAddressOfRawData
+            rva + dir_off + 4,              # EndAddressOfRawData
+            rva + dir_off + 8,              # AddressOfIndex
+            rva + dir_off + 12]             # AddressOfCallBacks
+
+
+def expand_relocs(exe: PEImage, rvas):
+    """Append the target's existing base-reloc table + new HIGHLOW entries for
+    `rvas` as a fresh `.streloc` section, and repoint the base-reloc data dir."""
+    from collections import defaultdict
+    rva0, size0 = exe.get_datadir(5)
+    existing = exe.read_rva(rva0, size0) if size0 else b""
+    pages = defaultdict(list)
+    for r in rvas:
+        pages[r & ~0xFFF].append(r & 0xFFF)
+    blocks = b""
+    for page in sorted(pages):
+        ents = b"".join(struct.pack("<H", 0x3000 | o) for o in sorted(pages[page]))
+        if len(ents) % 4:                   # DWORD-align the block with an ABSOLUTE(0) pad
+            ents += b"\x00\x00"
+        blocks += struct.pack("<II", page, 8 + len(ents)) + ents
+    merged = existing + blocks
+    nrva = exe.add_section(".streloc", merged, pewrite.CHARS_RDATA)
+    exe.set_datadir(5, nrva, len(merged))
 
 
 def main(argv):

@@ -62,8 +62,13 @@ STUFF TEST: PASS  ->  OK in=2250 comp=64 dec=2250
 
 ## Scope / limits
 
-- Target exe must be **reloc-stripped** (VB6 default). ActiveX exes have relocs —
-  not supported yet.
+- Works on both **reloc-stripped** targets (a standard VB6 exe, fixed base — just
+  bake) and **relocatable** ones (an **ActiveX DLL**, which has a `.reloc` for
+  ASLR — the stuffed code's relocs + the TLS directory's VA fields are merged into
+  the target's base-reloc table). Validated: `sqlite3_vb6.dll` fused into
+  `sqlite4vb.dll` (ActiveX), usable via COM with the C DLL removed. (A 32-bit COM
+  host — `SysWOW64\cscript.exe` / `regsvr32.exe` — is needed to register/run a
+  32-bit in-proc DLL.)
 - The fused DLL must be PE32/i386 with a `.reloc`, no delay/bound imports, no own
   TLS directory (refused via `pe32`). `.rsrc` is skipped.
 - Same runtime-identity caveats as any static fusion (`GetModuleHandle(self)` = 0,

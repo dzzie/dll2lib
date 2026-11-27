@@ -52,26 +52,42 @@ has a TLS dir, and runs with no `ucl_dll.dll`.
 
 ## Validated targets
 
-- **UCL** (dynamic CRT, small) — `tests/run.py` ✅
+- **UCL** (dynamic CRT, small, exe) — `tests/run.py` ✅
 - **SQLite** (`sqlite3_vb6.dll`, 1 MB, **static CRT**, 45 exports, full sqlite4vb
-  OO class stack) — `tests/run_sql.py` ✅ → `OK version=3.53.0 count=2 row2=fused`
-  with the DLL deleted. This is the one that actually exercises the TLS init:
-  `sqlite3_libversion` works without it, but `sqlite3_open` calls `malloc`, which
-  faults unless `DllMainCRTStartup` ran. The injected TLS callback runs it.
+  stack, exe) — `tests/run_sql.py` ✅ → `OK version=3.53.0 count=2 row2=fused`
+  with the DLL deleted.
+- **ActiveX DLL** (`sqlite4vb.dll`, Type=OleDll, **relocatable**, base 0x11000000)
+  with `sqlite3_vb6.dll` stuffed in ✅ — registers (`regsvr32`, exit 0), and
+  `CreateObject("SqlLite4VB.cSQLite")` runs the fused engine standalone
+  (`version=3.53.0 / count=2 / row2=fused`), clean teardown. (Manual test; a
+  32-bit COM host is required — `SysWOW64\cscript.exe` / `SysWOW64\regsvr32.exe`.)
 
-### TLS stub gotcha (cost a crash to find)
-The hand-rolled callback must be byte-exact: the `call rel32` is relative to the
-address **after** the 5-byte instruction (`entry - (call_rva + 5)`, not `+4`), and
-the `jne done` displacement must land exactly on `pop ebp`. An off-by-one there
-means the loader's callback jumps 1 byte into `DllMainCRTStartup` → the CRT never
-initializes → the first `malloc` crashes. Dynamic-CRT DLLs (UCL) hide the bug
-because they don't need the init.
+### Relocatable targets (the "usurp + expand the reloc table" path)
+A VB6 **exe** is reloc-stripped (fixed base) so we just bake. An **ActiveX DLL**
+has a `.reloc` (ASLR), so `expand_relocs()` rebuilds the target's base-reloc table
+= its existing blocks + HIGHLOW entries for **every stuffed absolute** (the DLL's
+relocs at their new RVAs) **and the injected TLS directory's 5 VA fields**, into a
+new `.streloc` section, repointing data dir 5. Verified it loads *and* relocates
+to a non-preferred base.
+
+### Two gotchas that each cost a crash
+1. **TLS stub byte-math.** `call rel32` is relative to the address *after* the
+   5-byte instruction (`entry - (call_rva + 5)`), and any `jXX` must land exactly
+   on its target. An off-by-one jumps 1 byte into `DllMainCRTStartup` → CRT never
+   inits → first `malloc` faults. (Dynamic-CRT DLLs hide it.)
+2. **Forward ALL DllMain reasons, not just ATTACH.** The MSVC CRT registers an
+   **FLS callback** in `DllMainCRTStartup(ATTACH)` and unregisters it with
+   `FlsFree` on **DETACH**. If the TLS stub gates on ATTACH only, DETACH never
+   runs, the FLS callback dangles, and at process teardown **ntdll's FLS cleanup
+   calls the stale pointer into the (now-unmapped) stuffed region → AV**. Only
+   bites DLL targets (unmapped mid-shutdown), not exes. The stub forwards every
+   reason; `FlsFree` then runs and teardown is clean (`regsvr32` exits 0).
 
 ## Not yet / scope
 
-- Target must be **reloc-stripped** (VB6 default). ActiveX exes/DLLs have relocs
-  — not supported yet (would add the DLL's relocs to the target's `.reloc`).
 - Delay/bound imports in the DLL: refused via pe32. Resources (`.rsrc`) skipped.
+- ActiveX validated manually; not yet a committed automated test (needs COM
+  register + a 32-bit host).
 
 ## Files
 
