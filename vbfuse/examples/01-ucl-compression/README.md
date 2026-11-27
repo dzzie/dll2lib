@@ -14,13 +14,14 @@ into a standalone exe that needs no `ucl_dll.dll` at runtime.
 
 ### Build
 ```
-python build.py            (or:  build.cmd)
+python build.py            (or:  build.cmd)    native-compiled -> ucltest_fused.exe
+python build.py --pcode    P-code-compiled   -> ucltest_fused_p.exe
 python build.py --run      build, then run (prints to the console)
 ```
-`build.py` invokes `vbfuse UclTest.vbp --fuse ucl_dll.dll --console --export-fused`.
-`--export-fused` means the fused functions show up in the exe's own export table,
-so `dumpbin /exports ucltest_fused.exe` lists `Compress`, `DeCompress`, … at
-their fused RVAs — handy for poking at the result.
+`build.py` invokes `vbfuse UclTest.vbp --fuse ucl_dll.dll --console`. The fused
+functions show up in the exe's own export table, so `dumpbin /exports
+ucltest_fused.exe` lists `Compress`, `DeCompress`, … at their fused RVAs — handy
+for poking at the result. `--pcode` builds the same thing from a P-code compile.
 
 ### Expected output
 ```

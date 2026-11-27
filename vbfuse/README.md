@@ -73,8 +73,15 @@ Nothing is installed or permanently changed; VB6 compiles normally and the
 ```
 vbfuse <project.vbp> --fuse foo.dll [--fuse bar.dll ...]
        [--fuse-runtime C:\Windows\SysWOW64\msvbvm60.dll [--vbstatic VBStatic.exe]]
-       [--console] [--lib] [--out fused.exe] [--run [-- <args>]]
+       [--console] [--pcode] [--lib] [--out fused.exe] [--run [-- <args>]]
 ```
+
+`--pcode` compiles the project as **P-code** (`CompilationType=-1`) instead of
+native for the capture, then restores the `.vbp`. Fusion still works — a `Declare`
+compiles to a native thunk in the main OBJ even in a p-code build — so you get a
+fused, standalone p-code exe (the examples make these as `*_fused_p.exe`, and the
+full SQLite+runtime demo fuses in p-code too). *Note:* VB6 forces public class
+modules to private in a p-code Standard-EXE, which is fine for a `Sub Main` app.
 
 By default vbfuse needs only **VB6 + Python** (it links the fused object with
 VB6's own `LINK.EXE`). `--lib` additionally emits the dll2lib static `.lib` for

@@ -154,9 +154,13 @@ Credits) for a fully standalone exe.
 ```
 vbfuse app.vbp --fuse foo.dll [--fuse bar.dll ...]
        [--fuse-runtime C:\Windows\SysWOW64\msvbvm60.dll [--vbstatic VBStatic.exe]]
-       [--console] [--lib] [--out fused.exe] [--run [-- args]]
+       [--console] [--pcode] [--lib] [--out fused.exe] [--run [-- args]]
 ```
 
+- `--pcode` compiles the VB6 project as **P-code** instead of native (the `.vbp`
+  is flipped to `CompilationType=-1` for the build, then restored). Fusion still
+  works — the `Declare` thunks stay native in the main OBJ — so you get a fused,
+  standalone *p-code* exe. (The examples build these as `*_fused_p.exe`.)
 - `--lib` also emits the dll2lib static `.lib` for each fused DLL as a reusable
   deliverable (needs `lib.exe`); the fuse itself doesn't require it.
 - `--console` builds the exe with the CONSOLE subsystem, so a VB

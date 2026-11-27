@@ -23,15 +23,17 @@ fused into a **single exe that depends on nothing but base Windows DLLs** — no
 
 ### Build
 ```
-python build.py            (or:  build.cmd)
+python build.py            (or:  build.cmd)    native-compiled -> sqlapp_fused.exe
+python build.py --pcode    P-code-compiled   -> sqlapp_fused_p.exe
 python build.py --run      build, then run (prints to the console)
 ```
 `build.py` invokes
 `vbfuse SqlApp.vbp --fuse sqlite3_vb6.dll --fuse-runtime …\msvbvm60.dll --console`
-(`VBStatic.exe` is auto‑located in `tools/`).
-With `--export-fused`, `dumpbin /exports sqlapp_fused.exe` lists all 45 fused
-`vb6_sqlite3_*` functions at their RVAs — the fused SQLite engine is labelled in
-the exe's own export table, even though the exe still imports only base Windows DLLs.
+(`VBStatic.exe` is auto‑located in `tools/`). `dumpbin /exports sqlapp_fused.exe`
+lists all 45 fused `vb6_sqlite3_*` functions at their RVAs — the fused SQLite
+engine is labelled in the exe's own export table, even though the exe still
+imports only base Windows DLLs. `--pcode` fuses a P-code build the same way
+(runtime included).
 
 ### Expected output
 ```

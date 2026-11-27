@@ -85,6 +85,10 @@ def main(argv):
     ap.add_argument("--out", help="output exe (default <exe>_fused.exe next to the vbp)")
     ap.add_argument("--work", help="work dir (default <projdir>\\vbfuse_work)")
     ap.add_argument("--run", action="store_true", help="run the fused exe when done")
+    ap.add_argument("--pcode", action="store_true",
+                    help="compile the VB6 project as P-code (CompilationType=-1) for "
+                         "the capture, instead of native; the .vbp is restored after. "
+                         "Fusion still works (Declare thunks stay native).")
     ap.add_argument("--lib", action="store_true",
                     help="also emit the dll2lib static .lib(s) for the fused DLL(s) "
                          "as a reusable deliverable (needs lib.exe / MS build tools; "
@@ -106,9 +110,27 @@ def main(argv):
     work = os.path.abspath(a.work) if a.work else os.path.join(proj_dir, "vbfuse_work")
     markers = [os.path.basename(d) for d in a.fuse]
 
-    # 1) compile under the debugger + capture OBJs/link line
-    print(f"[1/4] compiling {os.path.basename(vbp)} under debugger ...")
-    cap = vbcapture.capture(vbp, work, verbose=True)
+    # 1) compile under the debugger + capture OBJs/link line.
+    #    --pcode temporarily flips the .vbp to P-code (CompilationType=-1) for the
+    #    compile, then restores it. (Declare thunks stay native in the main OBJ, so
+    #    fusion still works; only the VB logic becomes P-code.)
+    orig_vbp = None
+    if a.pcode:
+        import re
+        orig_vbp = open(vbp, "r", encoding="latin-1", newline="").read()
+        if "CompilationType=" in orig_vbp:
+            txt = re.sub(r"CompilationType=-?\d+", "CompilationType=-1", orig_vbp, count=1)
+        else:
+            txt = orig_vbp.rstrip("\r\n") + "\r\nCompilationType=-1\r\n"
+        open(vbp, "w", encoding="latin-1", newline="").write(txt)
+        print(f"[1/4] compiling {os.path.basename(vbp)} under debugger (P-code) ...")
+    else:
+        print(f"[1/4] compiling {os.path.basename(vbp)} under debugger ...")
+    try:
+        cap = vbcapture.capture(vbp, work, verbose=True)
+    finally:
+        if orig_vbp is not None:
+            open(vbp, "w", encoding="latin-1", newline="").write(orig_vbp)
     if not cap.ok:
         print("VB6 build did not produce capturable OBJs / link line.")
         print(cap.log or "(no build log)"); return 1

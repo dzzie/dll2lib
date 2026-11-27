@@ -16,9 +16,12 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 VBFUSE = os.path.normpath(os.path.join(HERE, "..", "..", "vbfuse.py"))
 
+pcode = "--pcode" in sys.argv          # P-code build -> *_p.exe
+out = os.path.join(HERE, "ucltest_fused_p.exe" if pcode else "ucltest_fused.exe")
 cmd = [sys.executable, VBFUSE, os.path.join(HERE, "UclTest.vbp"),
-       "--fuse", os.path.join(HERE, "ucl_dll.dll"), "--console",
-       "--out", os.path.join(HERE, "ucltest_fused.exe")]
+       "--fuse", os.path.join(HERE, "ucl_dll.dll"), "--console", "--out", out]
+if pcode:
+    cmd.append("--pcode")
 if "--run" in sys.argv:
     cmd += ["--run"]          # console-subsystem exe: output goes to the console
 raise SystemExit(subprocess.call(cmd))
