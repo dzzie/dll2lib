@@ -14,6 +14,9 @@ exercises exestuff's reloc-table merge.
 - `sqlite3_vb6.dll` — the C SQLite engine (static CRT) to stuff in.
 - `sqlite4vb_stuffed.dll` — the **prebuilt stuffed result** (checked in): a
   self-contained ActiveX DLL that needs no `sqlite3_vb6.dll`.
+- `sqlite4vb_stuffed_p.dll` — the same, but built from a **P-code** compile of the
+  ActiveX DLL (`_p`), for analysis tooling (e.g. vbdec) that wants both flavors.
+  See `tests/make_samples.py`; both verified working over COM with the C DLL gone.
 
 ### What exestuff does here
 `exestuff sqlite4vb.dll sqlite3_vb6.dll -> sqlite4vb_stuffed.dll`:

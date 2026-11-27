@@ -87,6 +87,13 @@ STUFF TEST: PASS  ->  OK in=2250 comp=64 dec=2250
 | `pewrite.py` | PE writer: append sections, patch headers / data directories |
 | `tests/run.py` | regression test |
 | `tests/corpus/` | `stufftest.*` (VB6 source + exe) + `ucl_dll.dll` |
+| `tests/make_samples.py` | regenerates the committed stuffed sample binaries |
+
+Each corpus also ships the **stuffed sample binaries** themselves, committed for
+analysis tooling (e.g. vbdec) — both a native-compiled build (`*_stuffed`) and a
+**P-code**-compiled build (`*_stuffed_p`) of every target, so no VB6 or stuffing
+run is needed to inspect a finished fused binary. Regenerate with
+`python tests/make_samples.py` (needs VB6 for the P-code compiles).
 
 ## Credit
 
