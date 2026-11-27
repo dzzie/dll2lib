@@ -48,6 +48,10 @@ End-to-end working on both CRT flavors — see `notes.md` for the staged breakdo
   exports, full sqlite4vb OO stack) stuffed into `stufftest_sql.exe`, DLL removed,
   still `OK version=3.53.0 count=2 row2=fused` — the TLS-injected `DllMainCRTStartup`
   makes the static CRT heap work.
+- `tests/run_activex.py` — **ActiveX DLL** (`sqlite4vb.dll`, relocatable) with
+  SQLite stuffed in, registered and driven over COM with the C DLL removed:
+  `version=3.53.0 / count=2 / row2=fused`, clean teardown. (Needs 32-bit Python;
+  see `tests/corpus_activex/`.)
 
 ```
 > python tests/run.py
