@@ -239,6 +239,8 @@ What each part needs on top of that:
   own `LINK.EXE`. `--fuse-runtime` also needs `tools/VBStatic.exe`; `--lib` also
   needs `lib.exe`. No MS build tools are required otherwise.
 - **Tests** use `cl` / `dumpbin` as oracles; the pipeline itself never calls them.
+- The **C examples** also need `cl` / `link` — not for dll2lib, but to build the
+  throwaway sample DLL they then hand to it.
 
 No third-party Python dependencies — the PE reader and COFF writer are hand-rolled.
 
