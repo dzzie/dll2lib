@@ -154,9 +154,11 @@ Credits) for a fully standalone exe.
 ```
 vbfuse app.vbp --fuse foo.dll [--fuse bar.dll ...]
        [--fuse-runtime C:\Windows\SysWOW64\msvbvm60.dll [--vbstatic VBStatic.exe]]
-       [--console] [--out fused.exe] [--run [-- args]]
+       [--console] [--lib] [--out fused.exe] [--run [-- args]]
 ```
 
+- `--lib` also emits the dll2lib static `.lib` for each fused DLL as a reusable
+  deliverable (needs `lib.exe`); the fuse itself doesn't require it.
 - `--console` builds the exe with the CONSOLE subsystem, so a VB
   `ConsolePrint`-style `Sub` can write to stdout — handy for testing.
 - The fused DLL's exports are re-emitted in the exe's own export table
@@ -223,9 +225,18 @@ must be dll2lib-convertible (see "Refused outright"). `--fuse-runtime` embeds
 
 ## Toolchain
 
-Python 3 + MS Build Tools (x86: `cl` / `link` / `lib` / `dumpbin`, via
-`vcvars32`); vbfuse additionally needs **VB6 (VB98)** installed. No third-party
-Python dependencies — the PE reader and COFF writer are hand-rolled.
+The conversion itself (PE → COFF object) is pure hand-rolled Python — no tools.
+What each part needs on top of that:
+
+- **dll2lib:** Python 3 + MS `lib.exe` (x86, via `vcvars32`) to archive the
+  object into the `.lib` *product*. The final link is done by whatever builds the
+  consuming program.
+- **vbfuse:** Python 3 + **VB6 (VB98)** — it drives the real `VB6.EXE` and VB6's
+  own `LINK.EXE`. `--fuse-runtime` also needs `tools/VBStatic.exe`; `--lib` also
+  needs `lib.exe`. No MS build tools are required otherwise.
+- **Tests** use `cl` / `dumpbin` as oracles; the pipeline itself never calls them.
+
+No third-party Python dependencies — the PE reader and COFF writer are hand-rolled.
 
 ## Layout
 

@@ -26,8 +26,9 @@ with a static lib built from the C DLL.
 1. run  VB6.EXE /make  under a Win32 debugger            (trace_build.py)
 2. at the LINK.EXE spawn: copy the OBJs + save the exact link command line
 3. vbobj_extern  <project>.OBJ  --placeholder:foo.dll     (Declare thunks -> externs)
-4. dll2lib       foo.dll -> foo.lib                       (full static conversion)
-5. relink with VB98\LINK.EXE: captured args + patched OBJ + foo.lib -> fused .exe
+4. dll2lib       foo.dll -> foo.obj                       (full static conversion)
+5. relink with VB98\LINK.EXE: captured args + patched OBJ + foo.obj -> fused .exe
+   (--lib also archives foo.obj -> foo.lib as a reusable deliverable)
 ```
 
 Nothing is installed or permanently changed; VB6 compiles normally and the
@@ -72,8 +73,13 @@ Nothing is installed or permanently changed; VB6 compiles normally and the
 ```
 vbfuse <project.vbp> --fuse foo.dll [--fuse bar.dll ...]
        [--fuse-runtime C:\Windows\SysWOW64\msvbvm60.dll [--vbstatic VBStatic.exe]]
-       [--console] [--out fused.exe] [--run [-- <args>]]
+       [--console] [--lib] [--out fused.exe] [--run [-- <args>]]
 ```
+
+By default vbfuse needs only **VB6 + Python** (it links the fused object with
+VB6's own `LINK.EXE`). `--lib` additionally emits the dll2lib static `.lib` for
+each fused DLL — a reusable deliverable — which needs `lib.exe`; it's not required
+for the fuse itself. (`--fuse-runtime` additionally needs `tools/VBStatic.exe`.)
 
 ### Naming the fused code
 

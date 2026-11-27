@@ -11,9 +11,10 @@ Pipeline (on-demand, nothing installed or permanently changed):
   2. rewrite the project OBJ's `Declare Lib "foo.dll"` thunks into linker
      externs, using the DLL's own name as the marker (no VB source edit)
                                                                     [vbobj_extern]
-  3. convert each DLL to a static .lib                                 [dll2lib]
-  4. relink with VB6's own LINK.EXE: captured args + patched OBJ + the .lib(s),
-     forcing /OPT:NOREF (VB6's /OPT:REF dead-strips the fused obj)
+  3. convert each DLL to a COFF object                                 [dll2lib]
+  4. relink with VB6's own LINK.EXE: captured args + patched OBJ + the fused
+     object(s), forcing /OPT:NOREF (VB6's /OPT:REF dead-strips the fused obj)
+     (--lib also archives the object(s) into static .lib deliverables)
 """
 from __future__ import annotations
 import os
@@ -84,6 +85,10 @@ def main(argv):
     ap.add_argument("--out", help="output exe (default <exe>_fused.exe next to the vbp)")
     ap.add_argument("--work", help="work dir (default <projdir>\\vbfuse_work)")
     ap.add_argument("--run", action="store_true", help="run the fused exe when done")
+    ap.add_argument("--lib", action="store_true",
+                    help="also emit the dll2lib static .lib(s) for the fused DLL(s) "
+                         "as a reusable deliverable (needs lib.exe / MS build tools; "
+                         "not required for the fuse itself)")
     ap.add_argument("--console", action="store_true",
                     help="build the fused exe with the CONSOLE subsystem (so a VB "
                          "ConsolePrint-style Sub can write to stdout -- handy for testing)")
@@ -132,9 +137,11 @@ def main(argv):
     main_obj = next((o for o in cap.objs
                      if os.path.splitext(os.path.basename(o))[0].lower() == exe_stem.lower()), None)
 
-    # 3) convert each DLL -> static .lib. Expose each DLL's entry so a TLS
-    #    callback can run its CRT/DllMain init (no bootstrap -> no __ImageBase).
-    print("[3/4] converting DLL(s) -> static lib(s)")
+    # 3) convert each DLL -> a COFF object (hand-rolled, no tools). Expose each
+    #    DLL's entry so a TLS callback can run its CRT/DllMain init (no bootstrap
+    #    -> no __ImageBase). We link the .obj directly; `--lib` also archives it
+    #    into a static .lib (the dll2lib product -- needs lib.exe / build tools).
+    print("[3/4] converting DLL(s) -> fused object(s)")
     libs = []
     fused_objs = []
     entry_syms = []
@@ -154,15 +161,17 @@ def main(argv):
             print(f"      convert {os.path.basename(d)}: {e}", file=sys.stderr); return 1
         with open(os.path.join(work, stem + ".obj"), "wb") as f:
             f.write(obj_bytes)
-        r = vcrun(f'lib /nologo /out:"{stem}.lib" "{stem}.obj"', work)
-        if r.returncode != 0 or not os.path.isfile(os.path.join(work, stem + ".lib")):
-            print(f"      lib.exe failed for {stem}:\n{r.stdout}{r.stderr}", file=sys.stderr)
-            return 1
-        libs.append(stem + ".lib")
         fused_objs.append(stem + ".obj")
+        if a.lib:                                   # opt-in: also emit the static .lib
+            r = vcrun(f'lib /nologo /out:"{stem}.lib" "{stem}.obj"', work)
+            if r.returncode != 0 or not os.path.isfile(os.path.join(work, stem + ".lib")):
+                print(f"      lib.exe failed for {stem}:\n{r.stdout}{r.stderr}", file=sys.stderr)
+                return 1
+            libs.append(stem + ".lib")
         if esym:
             entry_syms.append(esym)
-        print(f"      {os.path.basename(d)} -> {stem}.lib"
+        print(f"      {os.path.basename(d)} -> {stem}.obj"
+              f"{' + ' + stem + '.lib' if a.lib else ''}"
               f"{'  (+entry ' + esym + ')' if esym else ''}")
 
     # emit a TLS-callback object that runs each fused DLL's entry at load time
@@ -221,12 +230,11 @@ def main(argv):
     if tls_obj:
         args.append(tls_obj)
         args.append("/INCLUDE:__tls_used")       # force the linker to wire the TLS dir
-    # Link the fused .obj DIRECTLY (always fully included) rather than the on-demand
-    # .lib -- otherwise LINK's export pre-pass can't resolve the exported symbols
-    # from a static lib (LNK2001 'build of exports file'), and unused exports would
-    # never be pulled in at all.
-    fused_inputs = fused_objs if export_names else libs
-    args += [os.path.join(work, x) for x in fused_inputs]
+    # Always link the fused .obj DIRECTLY (fully included) rather than a .lib --
+    # LINK's export pre-pass can't resolve exported symbols from a static lib
+    # (LNK2001 'build of exports file'), and unused exports would never be pulled
+    # in. (The optional --lib .lib is a separate, reusable deliverable.)
+    args += [os.path.join(work, o) for o in fused_objs]
 
     # re-emit every fused export in the exe's own export table (name -> fused RVA)
     if export_names:
@@ -268,6 +276,8 @@ def main(argv):
                 pass
     print(f"\nFUSED -> {fused}  ({os.path.getsize(fused)} bytes)")
     print(f"       no runtime dependency on: {', '.join(markers)}")
+    if a.lib and libs:
+        print(f"       static lib(s): {', '.join(os.path.join(work, l) for l in libs)}")
 
     if a.run:
         print(f"\nrunning: {os.path.basename(fused)} {' '.join(runargs)}")
