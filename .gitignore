@@ -20,6 +20,9 @@ vb6_make.log
 #     ship so the demos build without fuss and the results can be analyzed.
 !vbfuse/examples/**/*.dll
 !vbfuse/examples/**/*.exe
+# prebuilt C-example artifacts: the runnable demo + the dll2lib .lib product
+!/examples/**/*.exe
+!/examples/**/*.lib
 # bundled third-party build tool (VB6-LinkAlchemy's VBStatic, MIT)
 !tools/VBStatic.exe
 
