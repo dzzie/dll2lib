@@ -1,0 +1,15 @@
+Type=Exe
+Module=modMain; modMain.bas
+Class=CUclCompression; CUclCompression.cls
+Reference=*\G{00020430-0000-0000-C000-000000000046}#2.0#0#C:\WINNT\system32\stdole2.tlb#OLE Automation
+Startup="Sub Main"
+ExeName32="stufftest.exe"
+Name="StuffTest"
+MajorVer=1
+MinorVer=0
+RevisionVer=0
+CompilationType=0
+OptimizationType=0
+FavorPentiumPro(tm)=0
+ThreadPerObject=0
+MaxNumberOfThreads=1

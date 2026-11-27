@@ -227,6 +227,26 @@ must be dll2lib-convertible (see "Refused outright"). `--fuse-runtime` embeds
 
 ---
 
+## exestuff — stuff a C DLL into a *finished* VB6 exe (post-compile)
+
+[`exestuff/`](exestuff/) does the same fusion as vbfuse, but as **pure PE surgery
+on an already-compiled exe** — no VB6, no LINK, no build tools, no `.vbp`:
+
+```
+exestuff app.exe foo.dll [--console] -> app_stuffed.exe   (runs with no foo.dll)
+```
+
+It finds the `Declare` thunks in the exe's `.text`, appends the DLL as a new
+section (baking its relocations for the exe's fixed base — VB6 exes are
+reloc-stripped), merges the DLL's imports into the exe's import table, rewrites
+the thunks to `jmp` into the stuffed code, and injects a TLS callback for CRT
+init. Validated on UCL (dynamic CRT) and SQLite (`sqlite3_vb6.dll`, 1 MB **static
+CRT**, full sqlite4vb class stack) — both run standalone with the DLL deleted.
+It's a self-contained subproject (own forked `pe32.py`); see
+[`exestuff/README.md`](exestuff/README.md) and `exestuff/notes.md`.
+
+---
+
 ## Toolchain
 
 The conversion itself (PE → COFF object) is pure hand-rolled Python — no tools.
@@ -256,6 +276,7 @@ No third-party Python dependencies — the PE reader and COFF writer are hand-ro
 | `tests/run_s*.py` | staged build-and-run tests (S0–S7), each self-checking |
 | `vbfuse/` | the VB6 fusion front end (`vbfuse.py`, `vbcapture.py`, `vbobj_extern.py`, `tlsinit.py`) |
 | `tools/` | bundled third-party build tool (`VBStatic.exe`, for `--fuse-runtime`) |
+| `exestuff/` | post-compile DLL stuffing — fuse a C DLL into a *finished* VB6 exe by PE surgery (standalone subproject) |
 | `vbfuse/examples/` | two runnable demos + their prebuilt fused exes |
 
 ## Credits & acknowledgements

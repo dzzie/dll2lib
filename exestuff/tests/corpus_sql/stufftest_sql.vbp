@@ -1,0 +1,17 @@
+Type=Exe
+Module=modSQLite; modSQLite.bas
+Module=modMain; modMain.bas
+Class=cSQLiteAPI; cSQLiteAPI.cls
+Class=cSQLiteColumn; cSQLiteColumn.cls
+Class=cSQLiteStatement; cSQLiteStatement.cls
+Class=cSQLiteResults; cSQLiteResults.cls
+Class=cSQLiteSchema; cSQLiteSchema.cls
+Class=cSQLite; cSQLite.cls
+Reference=*\G{00020430-0000-0000-C000-000000000046}#2.0#0#C:\WINNT\system32\stdole2.tlb#OLE Automation
+Startup="Sub Main"
+ExeName32="stufftest_sql.exe"
+Name="StuffTestSql"
+CompilationType=0
+OptimizationType=0
+ThreadPerObject=0
+MaxNumberOfThreads=1

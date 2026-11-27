@@ -25,6 +25,13 @@ vb6_make.log
 !/examples/**/*.lib
 # bundled third-party build tool (VB6-LinkAlchemy's VBStatic, MIT)
 !tools/VBStatic.exe
+# exestuff: prebuilt test inputs so the stuff tests run without VB6 ...
+!exestuff/tests/corpus*/*.exe
+!exestuff/tests/corpus*/*.dll
+# ... but not the generated stuffed outputs / logs / backups
+exestuff/tests/corpus*/*_stuffed.exe
+make.log
+*.away
 
 # local-only tooling (kept in-tree for convenience, never committed)
 /private/
