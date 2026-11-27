@@ -114,6 +114,27 @@ Then `vbfuse app.vbp --fuse foo.dll --console --run` prints the app's output to
 the console. (For full console I/O — argv, stdin, pipes, exit codes — see Karl E.
 Peterson's classic `MConsole.bas`.)
 
+### Fusing the VB6 runtime (`--fuse-runtime`)
+
+A plain `--fuse foo.dll` build is entirely our own code. But `--fuse-runtime` —
+which also embeds `msvbvm60.dll` for a *fully* standalone exe — is done by
+**UltraAlex0's compiled `VBStatic.exe`** (from VB6‑LinkAlchemy). vbfuse runs it
+as a subprocess on the **captured main project `.OBJ`**
+(`VBStatic.exe msvbvm60.dll <main>.OBJ`): it merges the runtime into that OBJ and
+defines `_VBStaticEntry`, then vbfuse relinks. We ported the *Declare‑thunk
+rewrite* to Python (`vbobj_extern.py`), but the runtime‑fusion itself is his tool
+— credited, not rewritten.
+
+So **`--fuse-runtime` requires `VBStatic.exe` on disk** (bundled under
+`examples/`; pass `--vbstatic <path>`, or `find_vbstatic()` locates it). Plain
+C‑DLL fusion needs none of this.
+
+Because VBStatic (and the relink) operate on the captured OBJs, timing matters:
+VB6 deletes the OBJs the instant its own link finishes, so `vbcapture` grabs them
+mid‑build at the `LINK.EXE` spawn into `vbfuse_work/obj/`. That work dir is
+**kept, not cleaned** — handy for inspecting exactly what went into the fuse;
+remove it with `rm -rf vbfuse_work` when done.
+
 See **`VB6_FUSION_NOTES.md`** for the full VB6 build model, the Declare-thunk
 format, the debugger capture, the `/OPT:NOREF` rule, and the TLS-callback CRT-init.
 
